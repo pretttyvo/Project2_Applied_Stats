@@ -84,12 +84,13 @@ bank$binaryY<-factor(ifelse(bank$y=="yes",1,0))
 
 #Looping through all the columns to see distribution
     ## LOOP CURRENTLY NOT WORKING
-loop.vector <- c("age", "duration","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
+
+#loop.vector <- c("age", "duration","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
 #loop.vector <- colnames(bank) ##tried to use them all, throws error
-for (i in loop.vector){
-  out <- t(aggregate(i~bank$binaryY,data=bank,summary))
-  out
-}
+#for (i in loop.vector){
+#  out <- t(aggregate(i~bank$binaryY,data=bank,summary))
+#  out
+#}
 ```
 
 I don't think these are great visualizations, but leaving them here for reference if we need them later
@@ -109,6 +110,8 @@ ftable(addmargins(table(bank$job,bank$y)))
 ```
 
 I still need to go through and add the remaining variables
+ 
+# Bank Client Data
 ```{r EDA by Variable}
 attach(bank)
 #Proportions of Categorical
@@ -130,7 +133,7 @@ bank$agebucket <- with(bank, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(ag
 
 attach(bank)
 prop.table(table(y,agebucket),2)
-plot(y~agebucket,col=c("red","blue")) #not sure why this is throwing error
+barplot(prop.table(table(y,agebucket),2),col=c("red","blue"))
 
 #Job - Categorical
 #Student & Retired have more Y with 25 & 31% 
@@ -147,27 +150,63 @@ plot(y~marital,col=c("red","blue"))
 prop.table(table(y,education),2) #
 plot(y~education,col=c("red","blue"))
 
-
-
-
+#Default - (categorical: 'no','yes','unknown')
 prop.table(table(y,default),2) #default: has credit in default?
 plot(y~default,col=c("red","blue"))
 
+#Housing
 prop.table(table(y,housing),2) #no distinguishing, all around 11% 
 plot(y~housing,col=c("red","blue"))
 
+#Loan
 prop.table(table(y,loan),2) #no distinguishing, all around 11% 
 plot(y~loan,col=c("red","blue"))
+```
 
+# Related to the last contact of current campaign
+```{r}
+#Contact Communication Type
 prop.table(table(y,contact),2) #15% yes on cellular vs 5% on telephone
 plot(y~contact,col=c("red","blue"))
 
+#Month
 prop.table(table(y,month),2) #march & december almost have 50% yeses
 plot(y~month,col=c("red","blue"))
 
+#Weekday
 prop.table(table(y,day_of_week),2) #Tues - Thur have higher yeses - may be interesting to see in line graph
 plot(y~day_of_week,col=c("red","blue"))
 
+```
+
+
+# Other Attributes
+```{r}
+#campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+plot(campaign~y,col=c("red","blue"))
+
+#pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+plot(pdays~y,col=c("red","blue"))
+
+#previous: number of contacts performed before this campaign and for this client (numeric)
+plot(previous~y,col=c("red","blue"))
+
+#poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
 prop.table(table(y,poutcome),2)
 plot(y~poutcome,col=c("red","blue"))
+```
+
+# Social and Economic Context Attributes
+```{r}
+#emp.var.rate: employment variation rate - quarterly indicator (numeric)
+
+#cons.price.idx: consumer price index - monthly indicator (numeric)
+
+#cons.conf.idx: consumer confidence index - monthly indicator (numeric)
+
+#euribor3m: euribor 3 month rate - daily indicator (numeric)
+
+#nr.employed: number of employees - quarterly indicator (numeric)
+
+
 ```
