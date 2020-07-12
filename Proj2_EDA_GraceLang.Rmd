@@ -34,12 +34,18 @@ I'm not sure what the following variables mean in the context of the response:
 
 ```{r setup, include=FALSE}
 library(naniar)
+library(gplots)
+library(ggplot2)
+library(dplyr)
 
 #Grace's connection
 bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/bank-additional-full.csv")
 
 summary(bank)
 #pdays may be a irrelevant data point
+#Response is heavily weighted on No's 
+
+# ?? WOULD WE EVEN NEED TO SCALE ANY OF THESE CATEGORICAL VARIABLES? Q for Turner
 
 #No variables missing?
 gg_miss_var(bank)
@@ -50,20 +56,118 @@ gg_miss_var(bank)
 # Having  issues plotting categorical - not sure what i'm doing wrong here
 Need to find a better alternative for these views... what I iterated on wasn't great
 ```{r}
-library(dplyr)
 
 #Categorical x Categorical
 plot(bank$y, bank$job, xlab = "Response", ylab = "job")
 
 #Categorical x Continuous
 plot(bank$y, bank$pdays, xlab = "Response", ylab = "pdays")
-plot(bank$y, bank$previous, xlab = "Response", ylab = "previous")
-plot(bank$y, bank$poutcome, xlab = "Response", ylab = "poutcome")
-plot(bank$y, bank$emp.var.rate, xlab = "Response", ylab = "emp.var.rate")
-plot(bank$y, bank$cons.price.idx, xlab = "Response", ylab = "cons.price.idx")
-plot(bank$y, bank$cons.conf.idx, xlab = "Response", ylab = "cons.conf.idx")
-plot(bank$y, bank$euribor3m, xlab = "Response", ylab = "euribor3m")
-plot(bank$y, bank$nr.employed, xlab = "Response", ylab = "nr.employed")
+#plot(bank$y, bank$previous, xlab = "Response", ylab = "previous")
+#plot(bank$y, bank$poutcome, xlab = "Response", ylab = "poutcome")
+#plot(bank$y, bank$emp.var.rate, xlab = "Response", ylab = "emp.var.rate")
+#plot(bank$y, bank$cons.price.idx, xlab = "Response", ylab = "cons.price.idx")
+#plot(bank$y, bank$cons.conf.idx, xlab = "Response", ylab = "cons.conf.idx")
+#plot(bank$y, bank$euribor3m, xlab = "Response", ylab = "euribor3m")
+#plot(bank$y, bank$nr.employed, xlab = "Response", ylab = "nr.employed")
 
 
+```
+
+```{r}
+#Trying to get a pretty visual of some of the datapoints- don't really care for how this looks
+ggplot(bank, aes(cons.price.idx,emp.var.rate)) + 
+  geom_point() + 
+  facet_grid(rows = bank$y)
+
+#Creating a binary field for the Y
+bank$binaryY<-factor(ifelse(bank$y=="yes",1,0))
+
+#Looping through all the columns to see distribution
+    ## LOOP CURRENTLY NOT WORKING
+loop.vector <- c("age", "duration","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
+#loop.vector <- colnames(bank) ##tried to use them all, throws error
+for (i in loop.vector){
+  out <- t(aggregate(i~bank$binaryY,data=bank,summary))
+  out
+}
+```
+
+I don't think these are great visualizations, but leaving them here for reference if we need them later
+```{r}
+#Categorical Tables
+ftable(addmargins(table(bank$job,bank$y)))
+#ftable(addmargins(table(bank$marital,bank$y)))
+#ftable(addmargins(table(bank$education,bank$y)))
+#ftable(addmargins(table(bank$default,bank$y)))
+#ftable(addmargins(table(bank$housing,bank$y)))
+#ftable(addmargins(table(bank$loan,bank$y)))
+#ftable(addmargins(table(bank$contact,bank$y)))
+#ftable(addmargins(table(bank$month,bank$y)))
+#ftable(addmargins(table(bank$day_of_week,bank$y)))
+#ftable(addmargins(table(bank$poutcome,bank$y)))
+
+```
+
+I still need to go through and add the remaining variables
+```{r EDA by Variable}
+attach(bank)
+#Proportions of Categorical
+    # No: 88.7%
+    # Yes: 11.3%
+
+# ^^ those are the averages i used when comparing notes of proportions below
+
+
+
+#Age - Continuous
+prop.table(table(y,age),2)
+plot(y~age,col=c("red","blue"))
+#We might benefit from putting these into buckets and then using those buckets to draw conclusions
+
+#Creating an Age Bucket
+bank$agebucket <- with(bank, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
+,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","Less than 20"))))))))
+
+attach(bank)
+prop.table(table(y,agebucket),2)
+plot(y~agebucket,col=c("red","blue")) #not sure why this is throwing error
+
+#Job - Categorical
+#Student & Retired have more Y with 25 & 31% 
+prop.table(table(y,job),2)
+plot(y~job,col=c("red","blue"))
+#table(y,job)
+
+#Marital - Categorical
+#Single & Unkown a little higher with 14-15% 
+prop.table(table(y,marital),2)
+plot(y~marital,col=c("red","blue"))
+
+#Education - Categorical
+prop.table(table(y,education),2) #
+plot(y~education,col=c("red","blue"))
+
+
+
+
+prop.table(table(y,default),2) #default: has credit in default?
+plot(y~default,col=c("red","blue"))
+
+prop.table(table(y,housing),2) #no distinguishing, all around 11% 
+plot(y~housing,col=c("red","blue"))
+
+prop.table(table(y,loan),2) #no distinguishing, all around 11% 
+plot(y~loan,col=c("red","blue"))
+
+prop.table(table(y,contact),2) #15% yes on cellular vs 5% on telephone
+plot(y~contact,col=c("red","blue"))
+
+prop.table(table(y,month),2) #march & december almost have 50% yeses
+plot(y~month,col=c("red","blue"))
+
+prop.table(table(y,day_of_week),2) #Tues - Thur have higher yeses - may be interesting to see in line graph
+plot(y~day_of_week,col=c("red","blue"))
+
+prop.table(table(y,poutcome),2)
+plot(y~poutcome,col=c("red","blue"))
 ```
