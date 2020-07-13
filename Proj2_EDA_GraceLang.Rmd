@@ -42,16 +42,36 @@ library(dplyr)
 bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/bank-additional-full.csv")
 
 summary(bank)
-#pdays may be a irrelevant data point
-#Response is heavily weighted on No's 
-
+head(bank,10)
+#pdays
+summary(as.factor(bank$pdays))
+# does this mean that each individual record is potentially a duplicate contact to the client
+# Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed.
+# Potential for blocking, leveraging pdays --- REPEATED MEASURE
+summary(as.factor(bank$pdays))
+summary(as.factor(bank$previous))
+summary(as.factor(bank$pdays))
+summary(as.factor(bank$pdays))
 # ?? WOULD WE EVEN NEED TO SCALE ANY OF THESE CATEGORICAL VARIABLES? Q for Turner
 
 #No variables missing?
 gg_miss_var(bank)
 ```
+# Cleaning up some of the variables where there may be spaces - Grace
+Looking into the test/training split
+```{r}
 
+```
 
+# Convert some of the continous variables from factor to decimal - Julia
+```{r}
+
+```
+
+# Look into the records where it has unknown - does it have a bunch of unknown in other fields, or is it just in a few (NAs in essence) - Jamie
+```{r}
+
+```
 
 # Having  issues plotting categorical - not sure what i'm doing wrong here
 Need to find a better alternative for these views... what I iterated on wasn't great
