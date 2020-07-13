@@ -39,6 +39,7 @@ library(ggplot2)
 library(dplyr)
 
 #Bank
+setwd('~/Documents/GitHub/Project2_Applied_Stats/Data/')
 bank <- read.csv2("bank-additional-full.csv",header = TRUE)
 summary(bank)
 #pdays may be a irrelevant data point
