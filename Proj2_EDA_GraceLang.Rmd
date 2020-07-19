@@ -1,0 +1,296 @@
+---
+title: "Proj2_EDA_GraceLang"
+author: "Grace Lang"
+date: "7/11/2020"
+output: word_document
+---
+# Data set
+https://archive.ics.uci.edu/ml/datasets/bank%20marketing
+# Paper Referenced - that uses the dataset and conclusions
+http://media.salford-systems.com/video/tutorial/2015/targeted_marketing.pdf
+
+## Response
+21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
+
+# Questions about dataset
+I'm not sure what the following variables mean in the context of the response:
+
+11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+
+# other attributes:
+12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+14 - previous: number of contacts performed before this campaign and for this client (numeric)
+15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
+
+# social and economic context attributes
+16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
+17 - cons.price.idx: consumer price index - monthly indicator (numeric)
+18 - cons.conf.idx: consumer confidence index - monthly indicator (numeric)
+19 - euribor3m: euribor 3 month rate - daily indicator (numeric)
+20 - nr.employed: number of employees - quarterly indicator (numeric)
+
+
+
+```{r setup, include=FALSE}
+library(naniar)
+library(gplots)
+library(ggplot2)
+library(dplyr)
+
+#Grace's connection
+bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/bank-additional-full.csv")
+
+#Julia's connection
+#setwd('~/Documents/GitHub/Project2_Applied_Stats/Data/')
+#bank <- read.csv2("bank-additional-full.csv",header = TRUE)
+
+#Jamie's connection
+#bank <- read.csv2('../../Data/bank-additional-full.csv')
+
+summary(bank)
+head(bank,10)
+#pdays
+summary(as.factor(bank$pdays))
+# does this mean that each individual record is potentially a duplicate contact to the client
+# Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed.
+# Potential for blocking, leveraging pdays --- REPEATED MEASURE
+summary(as.factor(bank$pdays))
+summary(as.factor(bank$previous))
+summary(as.factor(bank$pdays))
+summary(as.factor(bank$pdays))
+# ?? WOULD WE EVEN NEED TO SCALE ANY OF THESE CATEGORICAL VARIABLES? Q for Turner
+
+#No variables missing?
+gg_miss_var(bank)
+```
+# Cleaning up some of the variables where there may be spaces - Grace
+Looking into the test/training split
+```{r}
+
+```
+
+# Convert some of the continous variables from factor to decimal - Julia
+```{r}
+#Clean up whitespaces
+
+#Unknowns
+clean_bank<-bank
+
+#1 - age (numeric)
+# okay
+#2 - job : type of job (categorical: 'admin.','blue-collar','entrepreneur','housemaid','management','retired','self-employed','services','student','technician','unemployed','unknown')
+clean_bank$job <- factor(clean_bank$job)
+#3 - marital : marital status (categorical: 'divorced','married','single','unknown'; note: 'divorced' means divorced or widowed)
+clean_bank$marital <- factor(clean_bank$marital)
+#4 - education (categorical: 'basic.4y','basic.6y','basic.9y','high.school','illiterate','professional.course','university.degree','unknown')
+clean_bank$education <- factor(clean_bank$education)
+#5 - default: has credit in default? (categorical: 'no','yes','unknown')
+clean_bank$default <- factor(clean_bank$default)
+#6 - housing: has housing loan? (categorical: 'no','yes','unknown')
+clean_bank$housing <- factor(clean_bank$housing)
+#7 - loan: has personal loan? (categorical: 'no','yes','unknown')
+clean_bank$loan <- factor(clean_bank$loan)
+
+
+# related with the last contact of the current campaign:
+#8 - contact: contact communication type (categorical: 'cellular','telephone') 
+clean_bank$contact <- factor(clean_bank$contact)
+#9 - month: last contact month of year (categorical: 'jan', 'feb', 'mar', ..., 'nov', 'dec')
+clean_bank$month <- factor(clean_bank$month)
+#10 - day_of_week: last contact day of the week (categorical: 'mon','tue','wed','thu','fri')
+clean_bank$day_of_week <- factor(clean_bank$day_of_week)
+#11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+
+# other attributes:
+#12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+#13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+#14 - previous: number of contacts performed before this campaign and for this client (numeric)
+#15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
+# social and economic context attributes
+
+#16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
+clean_bank$int.emp.var.rate<-as.integer(clean_bank$emp.var.rate)
+clean_bank$emp.var.rate <- factor(clean_bank$emp.var.rate)
+#17 - cons.price.idx: consumer price index - monthly indicator (numeric) 
+clean_bank$int.cons.price.idx<-as.integer(clean_bank$cons.price.idx)
+clean_bank$cons.price.idx <- factor(clean_bank$cons.price.idx)
+#18 - cons.conf.idx: consumer confidence index - monthly indicator (numeric) 
+clean_bank$int.cons.conf.idx<-as.integer(clean_bank$cons.conf.idx)
+clean_bank$cons.conf.idx <- factor(clean_bank$cons.conf.idx)
+#19 - euribor3m: euribor 3 month rate - daily indicator (numeric)
+clean_bank$int.euribor3m<-as.integer(clean_bank$euribor3m)
+clean_bank$euribor3m <- factor(clean_bank$euribor3m)
+#20 - nr.employed: number of employees - quarterly indicator (numeric)
+clean_bank$int.nr.employed<-as.integer(clean_bank$nr.employed)
+clean_bank$nr.employed <- factor(clean_bank$nr.employed)
+
+#Output variable (desired target):
+#21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
+clean_bank$y <- factor(clean_bank$y)
+
+clean_bank
+```
+
+# Look into the records where it has unknown - does it have a bunch of unknown in other fields, or is it just in a few (NAs in essence) - Jamie
+```{r}
+
+```
+
+# Having  issues plotting categorical - not sure what i'm doing wrong here
+Need to find a better alternative for these views... what I iterated on wasn't great
+```{r}
+
+#Categorical x Categorical
+plot(bank$y, bank$job, xlab = "Response", ylab = "job")
+
+#Categorical x Continuous
+plot(bank$y, bank$pdays, xlab = "Response", ylab = "pdays")
+#plot(bank$y, bank$previous, xlab = "Response", ylab = "previous")
+#plot(bank$y, bank$poutcome, xlab = "Response", ylab = "poutcome")
+#plot(bank$y, bank$emp.var.rate, xlab = "Response", ylab = "emp.var.rate")
+#plot(bank$y, bank$cons.price.idx, xlab = "Response", ylab = "cons.price.idx")
+#plot(bank$y, bank$cons.conf.idx, xlab = "Response", ylab = "cons.conf.idx")
+#plot(bank$y, bank$euribor3m, xlab = "Response", ylab = "euribor3m")
+#plot(bank$y, bank$nr.employed, xlab = "Response", ylab = "nr.employed")
+
+
+```
+
+```{r}
+#Trying to get a pretty visual of some of the datapoints- don't really care for how this looks
+ggplot(bank, aes(cons.price.idx,emp.var.rate)) + 
+  geom_point() + 
+  facet_grid(rows = bank$y)
+
+#Creating a binary field for the Y
+bank$binaryY<-factor(ifelse(bank$y=="yes",1,0))
+
+#Looping through all the columns to see distribution
+    ## LOOP CURRENTLY NOT WORKING
+
+#loop.vector <- c("age", "duration","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
+#loop.vector <- colnames(bank) ##tried to use them all, throws error
+#for (i in loop.vector){
+#  out <- t(aggregate(i~bank$binaryY,data=bank,summary))
+#  out
+#}
+```
+
+I don't think these are great visualizations, but leaving them here for reference if we need them later
+```{r}
+#Categorical Tables
+ftable(addmargins(table(bank$job,bank$y)))
+#ftable(addmargins(table(bank$marital,bank$y)))
+#ftable(addmargins(table(bank$education,bank$y)))
+#ftable(addmargins(table(bank$default,bank$y)))
+#ftable(addmargins(table(bank$housing,bank$y)))
+#ftable(addmargins(table(bank$loan,bank$y)))
+#ftable(addmargins(table(bank$contact,bank$y)))
+#ftable(addmargins(table(bank$month,bank$y)))
+#ftable(addmargins(table(bank$day_of_week,bank$y)))
+#ftable(addmargins(table(bank$poutcome,bank$y)))
+
+```
+
+I still need to go through and add the remaining variables
+ 
+# Bank Client Data
+```{r EDA by Variable}
+attach(bank)
+#Proportions of Categorical
+    # No: 88.7%
+    # Yes: 11.3%
+
+# ^^ those are the averages i used when comparing notes of proportions below
+
+
+
+#Age - Continuous
+prop.table(table(y,age),2)
+plot(y~age,col=c("red","blue"))
+#We might benefit from putting these into buckets and then using those buckets to draw conclusions
+
+#Creating an Age Bucket
+bank$agebucket <- with(bank, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
+,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","Less than 20"))))))))
+
+attach(bank)
+prop.table(table(y,agebucket),2)
+barplot(prop.table(table(y,agebucket),2),col=c("red","blue"))
+
+#Job - Categorical
+#Student & Retired have more Y with 25 & 31% 
+prop.table(table(y,job),2)
+plot(y~job,col=c("red","blue"))
+#table(y,job)
+
+#Marital - Categorical
+#Single & Unkown a little higher with 14-15% 
+prop.table(table(y,marital),2)
+plot(y~marital,col=c("red","blue"))
+
+#Education - Categorical
+prop.table(table(y,education),2) #
+plot(y~education,col=c("red","blue"))
+
+#Default - (categorical: 'no','yes','unknown')
+prop.table(table(y,default),2) #default: has credit in default?
+plot(y~default,col=c("red","blue"))
+
+#Housing
+prop.table(table(y,housing),2) #no distinguishing, all around 11% 
+plot(y~housing,col=c("red","blue"))
+
+#Loan
+prop.table(table(y,loan),2) #no distinguishing, all around 11% 
+plot(y~loan,col=c("red","blue"))
+```
+
+# Related to the last contact of current campaign
+```{r}
+#Contact Communication Type
+prop.table(table(y,contact),2) #15% yes on cellular vs 5% on telephone
+plot(y~contact,col=c("red","blue"))
+
+#Month
+prop.table(table(y,month),2) #march & december almost have 50% yeses
+plot(y~month,col=c("red","blue"))
+
+#Weekday
+prop.table(table(y,day_of_week),2) #Tues - Thur have higher yeses - may be interesting to see in line graph
+plot(y~day_of_week,col=c("red","blue"))
+
+```
+
+
+# Other Attributes
+```{r}
+#campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+plot(campaign~y,col=c("red","blue"))
+
+#pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+plot(pdays~y,col=c("red","blue"))
+
+#previous: number of contacts performed before this campaign and for this client (numeric)
+plot(previous~y,col=c("red","blue"))
+
+#poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
+prop.table(table(y,poutcome),2)
+plot(y~poutcome,col=c("red","blue"))
+```
+
+# Social and Economic Context Attributes
+```{r}
+#emp.var.rate: employment variation rate - quarterly indicator (numeric)
+
+#cons.price.idx: consumer price index - monthly indicator (numeric)
+
+#cons.conf.idx: consumer confidence index - monthly indicator (numeric)
+
+#euribor3m: euribor 3 month rate - daily indicator (numeric)
+
+#nr.employed: number of employees - quarterly indicator (numeric)
+
+
+```
