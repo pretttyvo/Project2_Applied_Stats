@@ -5,7 +5,13 @@ date: "7/12/2020"
 output: html_document
 ---
 
-```{r}
+# Introduction
+
+The data relates to a phone call marketing campaign directed by a banking institution to predict whether or not a client will participate in a term deposit. Term deposits are considered to be a more secure investment opportunity, considered to be somewhat protected from market fluctuations, as opposed to stocks. Generally, a client will invest a specific sum for a set amount of time (e.g. 5 months) with a predetermined interest rate. The investment is then pulled after the time has passed or prior, typically with a cost penalty. 
+
+The dataset contains all contact attempts to the clients, which can be multiple times to determine whether or not the client will subscribe to a term deposit (campaign). In total, there are 41,188 total observations. For social and economic context attributes, keep in mind that the indicators are assumed to be pulled from the general demographic, and is hence normalizing the data.
+
+```{r, results="hide", echo=FALSE}
 # read in libraries
 
 library(naniar)
@@ -23,8 +29,11 @@ knitr::opts_chunk$set(echo = TRUE)
 https://archive.ics.uci.edu/ml/datasets/bank%20marketing
 
 ### Variables
+
 Input variables:
+
 #### bank client data:
+
 1 - age (numeric)
 2 - job : type of job (categorical: 'admin.','blue-collar','entrepreneur','housemaid','management','retired','self-employed','services','student','technician','unemployed','unknown')
 3 - marital : marital status (categorical: 'divorced','married','single','unknown'; note: 'divorced' means divorced or widowed)
@@ -32,12 +41,16 @@ Input variables:
 5 - default: has credit in default? (categorical: 'no','yes','unknown')
 6 - housing: has housing loan? (categorical: 'no','yes','unknown')
 7 - loan: has personal loan? (categorical: 'no','yes','unknown')
+
 #### related with the last contact of the current campaign:
+
 8 - contact: contact communication type (categorical: 'cellular','telephone')
 9 - month: last contact month of year (categorical: 'jan', 'feb', 'mar', ..., 'nov', 'dec')
 10 - day_of_week: last contact day of the week (categorical: 'mon','tue','wed','thu','fri')
 11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+
 #### other attributes:
+
 12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
 13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
 14 - previous: number of contacts performed before this campaign and for this client (numeric)
@@ -78,38 +91,156 @@ Input variables:
  $ euribor3m     : Factor 
  $ nr.employed   : Factor 
  $ y             : Factor 
-```{r}
+```{r, results="hide", echo=FALSE}
 # read in the data
 df <- read.csv2('../../Data/bank-additional-full.csv')
 
 # get summary statistics
 summary(df)
-
+nrow(df)
 # types of each category
 str(df)
+```
+
+### Converting columns to correct types
+Convert required data from vector to int
+```{r, results="hide", echo=FALSE}
+# converting factors to numeric
+cols.vector <- c("emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
+length(cols.vector)
+
+# loop through the columns in the list and convert to numeric
+for (col.name in cols.vector){
+  df[col.name] <- sapply( df[col.name], as.numeric )
+
+}
+
+```
+##### EDA - Determining significant columns
+
+1. Pdays - a significant number of the observations do not have prior contacts, hence they do not have days after the first contacts filed (pdays not equal to 999). 3.68% of the observations (1,151 records) have had more than one contact. This appears to be an insignificant column.
+
+2. Previous - while ~14% of the clients were contacted prior to the current campaign, 11% were contacted only 1 prior, leaving only 3% that were contacted more than once, prior.  
+
+3. Campaigns - potentially significant
+
+4. Duration - This should be removed considering that the dataset states: for a realistic predictive model, this factor should not be considered.
+
+```{r, results="hide", echo=FALSE}
+# check pdays that is not 999
+df %>% filter(pdays != 999)
+
+# check for previous not equal to 0
+df %>% filter(previous != 0)
+df %>% filter(previous == 1)
+df.prev.great <- df %>% filter(previous != 0 & previous != 1)
+summary(df.prev.great)
+
+# check for campaigns that are greater than 1
+df.prior <- df %>% filter(campaign != 1)
+summary(df.prior)
 
 ```
 
 #####New Variable Generation
-```{r}
+```{r, echo=FALSE}
 
 ```
 
 ##### Handling of Missing Logistics
-There are no missing values 
-```{r}
+There are no missing values -> this is due to the fact that missing values are designated as unknown.
+
+Columns with missing data
+- Job 330 (type of job)
+- Marital 80
+- Eduation 1731 (highest education received)
+- Default 8597 (whether or not they have credit in default - failure to pay)
+- Housing 990 (has a housing loan or not)
+- Loan 990 (personal loan or not)
+
+Total number of observations: 41,188
+Total number of observations with at least one missing value: 10,700
+
+~26% of the observations have at least one missing data record. 
+
+The summary statistics do not initally appear to have a significant skew from the full data. A concern with the data is that all columns with missing data points are categorical. Majority of the rows only have one missing, with less than 20% having more than one missing portion of the record.
+
+Options:
+Ignore observations - not ideal
+Ignore variable - TBD in analysis
+Develop model to predict missing values 
+Treat missing data as just another category - Recommended
+
+
+```{r, results="hide", echo=FALSE}
 # check for missing values
-sapply(df, function(x) sum(is.na(x)))
+df.test <- df # create new df to modify
+sapply(df.test, function(x) sum(is.na(x)))
+
+# replace unknown with N/A for better analysis, then check again for n/a
+df.test[ df.test == "unknown" ] <- NA
+
+# get rows with n/a
+df.missing <- df.test %>% filter(is.na(job)| is.na(marital)| is.na(education)| is.na(default)| is.na(housing)| is.na(loan))
+df.missing$na_count <- apply(df.missing, 1, function(x) sum(is.na(x))) # create column of counts of na per row
+df.missing %>% filter(df.missing$na_count != 1) #check rows with more than 1 na
+summary(df.missing)
+
+# review each column of missing data
+df.missing.1 <- df %>% filter(is.na(job))
+summary(df.missing.1)
+
 ```
 
+##### Plotting for trend determination
+FULL DATASET: Visual for numeric, color categorized by whether or not the client participated in term deposit.
+```{r, echo=FALSE}
+# get all numeric columns into a subset
+  # original data
+    df.int <- df[,sapply(df,is.integer)|sapply(df,is.numeric)]
+    df.int$y <- df$y
+  # missing data
+    df.missing.int <- df.missing[,sapply(df.missing,is.integer)|sapply(df.missing,is.numeric)]
+    df.missing.int$y <- df.missing$y
+# create matrix plot to determine trends, if any
+  # original data
+    my_cols <- c("#00AFBB", "#E7B800") 
+    p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
+```
+MISSING DATA: Visual for numeric, color categorized by whether or not the client participated in term deposit.
+```{r, echo=FALSE}
+  # missing data
+    p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
+
+
+```
+
+Visual for categorical, color categorized by whether or not the client participated in term deposit.
+
+```{r, echo=FALSE}
+# get all columns that are vectors
+df.vector <- df[,sapply(df,is.factor)]
+df.missing.vector <- df.missing[,sapply(df.missing,is.factor)]
+
+t <- df.vector %>% group_by(marital, housing, contact, y) %>% count(marital, housing, contact, y)
+
+# graph vectors to determine trends
+ggplot(t, aes(x = housing, y=n))+
+  geom_bar(
+    aes(fill = marital), stat = "identity",
+    position = position_dodge(0.9)
+    )+
+  facet_wrap(~contact)+
+  ggtitle("Marital Stats vs. Housing vs. Contact")
+```
 
 2.  There are way more No's than Yes for the response variable.  Consider sampling your training data set in such a way that the Yes and No's are more equally balanced.   (This technique is referred to as downsampling.  There is also upsampling.)  After your groups meet and discuss, you can meet with me for a deeper discussion on this issue.
-```{r}
+```{r, echo=FALSE}
 
 ```
 
 
 3.  Of course EDA.  PCA_Unit9 R script has some potential starting graphics you can sift through as well as doing some PCA.  We'll discuss additional strategies in later units.  Don't forget summary statistics.  
-```{r}
+```{r, echo=FALSE}
 
 ```
