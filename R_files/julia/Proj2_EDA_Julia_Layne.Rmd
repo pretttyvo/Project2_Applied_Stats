@@ -115,3 +115,79 @@ clean_bank$y <- factor(clean_bank$y)
 clean_bank
 ```
 
+```{r}
+int_bank_fields <- c("age","campaign","pdays","previous","int.emp.var.rate","int.cons.price.idx", "int.emp.var.rate","int.cons.price.idx","int.euribor3m","int.nr.employed")
+
+int_bank_fields_y <- c("age","campaign","pdays","previous","int.emp.var.rate","int.cons.price.idx", "int.emp.var.rate","int.cons.price.idx","int.euribor3m","int.nr.employed","y")
+clean_bank[int_bank_fields_y]
+```
+
+```{r}
+cols <- character(nrow(clean_bank))
+cols[] <- "black"
+
+cols[clean_bank$y == "no"] <- "blue"
+cols[clean_bank$y == "yes"] <- "red"
+
+pairs(clean_bank[c("age","campaign","pdays","previous")],col=cols)
+```
+```{r}
+clean_bank[int_bank_fields]
+pairs(clean_bank[int_bank_fields],col=cols)
+
+```
+```{r}
+
+cor(subset(clean_bank, select=int_bank_fields)) -> df_cortest 
+melt(df_cortest) %>% ggplot(aes(x=Var1, y = Var2, fill = value)) + geom_tile(color = "white")+scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") + theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))+coord_fixed()
+
+
+#cor(subset(clean_bank, select=-int_bank_fields)) -> df_cortest 
+#melt(df_cortest) %>% ggplot(aes(x=Var1, y = Var2, fill = value)) + geom_tile(color = "white")+scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") + theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))+coord_fixed()
+
+```
+
+
+```{r}
+pc.bc<-prcomp(clean_bank[int_bank_fields],scale.=TRUE)
+pc.bc.scores<-pc.bc$x
+
+#Adding the response column to the PC's data frame
+pc.bc.scores<-data.frame(pc.bc.scores)
+pc.bc.scores$Diagnosis<-clean_bank[int_bank_fields_y]$y
+
+#Use ggplot2 to plot the first few pc's
+library(ggplot2)
+ggplot(data = pc.bc.scores, aes(x = PC1, y = PC2)) +
+  geom_point(aes(col=Diagnosis), size=1)+
+  ggtitle("Yes/No")
+
+ggplot(data = pc.bc.scores, aes(x = PC2, y = PC3)) +
+  geom_point(aes(col=Diagnosis), size=1)+
+  ggtitle("Yes/No")
+```
+
+```{r}
+library(Lahman)
+library(MASS)
+mylda<-lda(y~.,data=clean_bank[int_bank_fields_y])
+
+summary(mylda)
+pred<-predict(mylda,newdata=clean_bank[int_bank_fields_y])$class  #Predictions can come in many forms, the class form provides the categorical level of your response.
+Truth<-clean_bank[int_bank_fields_y]$y
+x<-table(pred,Truth) # Creating a confusion matrix
+x
+#Missclassification Error
+ME<-(x[2,1]+x[1,2])/100
+ME
+#Calculating overall accuracy
+1-ME
+```
+
+```{r}
+library(caret)
+downSample(clean_bank[int_bank_fields_y],clean_bank[int_bank_fields_y]$y)
+
+clean_bank[int_bank_fields]
+
+```
