@@ -37,35 +37,149 @@ library(naniar)
 library(gplots)
 library(ggplot2)
 library(dplyr)
+library(caret)
+library(reshape2)
+library(matlab)
 
 #Grace's connection
-bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/bank-additional-full.csv")
+bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
+
+#Julia's connection
+#setwd('~/Documents/GitHub/Project2_Applied_Stats/Data/')
+#bank <- read.csv2("bank-additional-full.csv",header = TRUE)
+
+#Jamie's connection
+#bank <- read.csv2('../../Data/bank-additional-full.csv')
 
 summary(bank)
 head(bank,10)
 #pdays
-summary(as.factor(bank$pdays))
-# does this mean that each individual record is potentially a duplicate contact to the client
-# Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed.
-# Potential for blocking, leveraging pdays --- REPEATED MEASURE
-summary(as.factor(bank$pdays))
-summary(as.factor(bank$previous))
-summary(as.factor(bank$pdays))
-summary(as.factor(bank$pdays))
-# ?? WOULD WE EVEN NEED TO SCALE ANY OF THESE CATEGORICAL VARIABLES? Q for Turner
-
+str(bank)
 #No variables missing?
 gg_miss_var(bank)
 ```
+
+```{r pdays}
+# does this mean that each individual record is potentially a duplicate contact to the client
+# Often, more than one contact to the same client was required, in order to access if the product (bank term deposit) would be ('yes') or not ('no') subscribed.
+# Potential for blocking, leveraging pdays --- REPEATED MEASURE
+sort(unique(bank$pdays))
+x <- table(bank$pdays)
+y <- as.data.frame(x)
+#all data
+plot(y)
+#outlier removed
+plot(y[c(1:26),])
+
+not_contacted <- y[27,2]/41188
+#96% of records have not been contacted before
+
+g<- as.data.frame(table(bank$pdays==999,bank$y))
+#Contact Y/N? -- do we want to change to binary ?
+#Code 999 as 0, but then interact binary and continuous pdays -- interaction in model = Pdays.cat*Pdays.cont
+
+# ?? WOULD WE EVEN NEED TO SCALE ANY OF THESE CATEGORICAL VARIABLES? Q for Turner
+
+#Reformatting data.frame
+h<- unstack(g, Freq~Var2)
+
+row.names(h) <- levels(g$Var1)
+h
+
+
+ggplot(g, aes(x=Var1, y=Freq, fill=Var2)) + geom_bar(stat = "identity") 
+
+```
+
+```{r previous}
+
+sort(unique(bank$previous))
+as.data.frame(table(bank$previous))
+
+
+sort(unique(bank$poutcome))
+as.data.frame(table(bank$poutcome,bank$y))
+```
 # Cleaning up some of the variables where there may be spaces - Grace
 Looking into the test/training split
+
+Pictures: 
+https://www.r-bloggers.com/down-sampling-using-random-forests/
+
+cut down train, then downsampling down the yes
 ```{r}
+set.seed(123)
+Train <- downSample(bank,bank$y)
+
+table(Train$Class)
+table(bank$y)
+
+Index.yes<-which(bank$y="yes")
+train.index<-sample(index.yes,500,replace=F)
+Train<-dat[c(train.index.yes,train.index.no),]
 
 ```
 
 # Convert some of the continous variables from factor to decimal - Julia
 ```{r}
+#Clean up whitespaces
 
+#Unknowns
+clean_bank<-bank
+
+#1 - age (numeric)
+# okay
+#2 - job : type of job (categorical: 'admin.','blue-collar','entrepreneur','housemaid','management','retired','self-employed','services','student','technician','unemployed','unknown')
+clean_bank$job <- factor(clean_bank$job)
+#3 - marital : marital status (categorical: 'divorced','married','single','unknown'; note: 'divorced' means divorced or widowed)
+clean_bank$marital <- factor(clean_bank$marital)
+#4 - education (categorical: 'basic.4y','basic.6y','basic.9y','high.school','illiterate','professional.course','university.degree','unknown')
+clean_bank$education <- factor(clean_bank$education)
+#5 - default: has credit in default? (categorical: 'no','yes','unknown')
+clean_bank$default <- factor(clean_bank$default)
+#6 - housing: has housing loan? (categorical: 'no','yes','unknown')
+clean_bank$housing <- factor(clean_bank$housing)
+#7 - loan: has personal loan? (categorical: 'no','yes','unknown')
+clean_bank$loan <- factor(clean_bank$loan)
+
+
+# related with the last contact of the current campaign:
+#8 - contact: contact communication type (categorical: 'cellular','telephone') 
+clean_bank$contact <- factor(clean_bank$contact)
+#9 - month: last contact month of year (categorical: 'jan', 'feb', 'mar', ..., 'nov', 'dec')
+clean_bank$month <- factor(clean_bank$month)
+#10 - day_of_week: last contact day of the week (categorical: 'mon','tue','wed','thu','fri')
+clean_bank$day_of_week <- factor(clean_bank$day_of_week)
+#11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+
+# other attributes:
+#12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+#13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+#14 - previous: number of contacts performed before this campaign and for this client (numeric)
+#15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
+# social and economic context attributes
+
+#16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
+clean_bank$int.emp.var.rate<-as.integer(clean_bank$emp.var.rate)
+clean_bank$emp.var.rate <- factor(clean_bank$emp.var.rate)
+#17 - cons.price.idx: consumer price index - monthly indicator (numeric) 
+clean_bank$int.cons.price.idx<-as.integer(clean_bank$cons.price.idx)
+clean_bank$cons.price.idx <- factor(clean_bank$cons.price.idx)
+#18 - cons.conf.idx: consumer confidence index - monthly indicator (numeric) 
+clean_bank$int.cons.conf.idx<-as.integer(clean_bank$cons.conf.idx)
+clean_bank$cons.conf.idx <- factor(clean_bank$cons.conf.idx)
+#19 - euribor3m: euribor 3 month rate - daily indicator (numeric)
+clean_bank$int.euribor3m<-as.integer(clean_bank$euribor3m)
+clean_bank$euribor3m <- factor(clean_bank$euribor3m)
+#20 - nr.employed: number of employees - quarterly indicator (numeric)
+clean_bank$int.nr.employed<-as.integer(clean_bank$nr.employed)
+clean_bank$nr.employed <- factor(clean_bank$nr.employed)
+
+#Output variable (desired target):
+#21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
+clean_bank$y <- factor(clean_bank$y)
+
+clean_bank
 ```
 
 # Look into the records where it has unknown - does it have a bunch of unknown in other fields, or is it just in a few (NAs in essence) - Jamie
