@@ -40,6 +40,7 @@ library(dplyr)
 library(caret)
 library(reshape2)
 library(matlab)
+library(MASS)
 
 #Grace's connection
 bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
@@ -100,87 +101,7 @@ as.data.frame(table(bank$previous))
 sort(unique(bank$poutcome))
 as.data.frame(table(bank$poutcome,bank$y))
 ```
-# Cleaning up some of the variables where there may be spaces - Grace
-Looking into the test/training split
 
-Pictures: 
-https://www.r-bloggers.com/down-sampling-using-random-forests/
-
-cut down train, then downsampling down the yes
-```{r}
-set.seed(123)
-Train <- downSample(bank,bank$y)
-
-table(Train$Class)
-table(bank$y)
-
-Index.yes<-which(bank$y="yes")
-train.index<-sample(index.yes,500,replace=F)
-Train<-dat[c(train.index.yes,train.index.no),]
-
-```
-
-# Convert some of the continous variables from factor to decimal - Julia
-```{r}
-#Clean up whitespaces
-
-#Unknowns
-clean_bank<-bank
-
-#1 - age (numeric)
-# okay
-#2 - job : type of job (categorical: 'admin.','blue-collar','entrepreneur','housemaid','management','retired','self-employed','services','student','technician','unemployed','unknown')
-clean_bank$job <- factor(clean_bank$job)
-#3 - marital : marital status (categorical: 'divorced','married','single','unknown'; note: 'divorced' means divorced or widowed)
-clean_bank$marital <- factor(clean_bank$marital)
-#4 - education (categorical: 'basic.4y','basic.6y','basic.9y','high.school','illiterate','professional.course','university.degree','unknown')
-clean_bank$education <- factor(clean_bank$education)
-#5 - default: has credit in default? (categorical: 'no','yes','unknown')
-clean_bank$default <- factor(clean_bank$default)
-#6 - housing: has housing loan? (categorical: 'no','yes','unknown')
-clean_bank$housing <- factor(clean_bank$housing)
-#7 - loan: has personal loan? (categorical: 'no','yes','unknown')
-clean_bank$loan <- factor(clean_bank$loan)
-
-
-# related with the last contact of the current campaign:
-#8 - contact: contact communication type (categorical: 'cellular','telephone') 
-clean_bank$contact <- factor(clean_bank$contact)
-#9 - month: last contact month of year (categorical: 'jan', 'feb', 'mar', ..., 'nov', 'dec')
-clean_bank$month <- factor(clean_bank$month)
-#10 - day_of_week: last contact day of the week (categorical: 'mon','tue','wed','thu','fri')
-clean_bank$day_of_week <- factor(clean_bank$day_of_week)
-#11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
-
-# other attributes:
-#12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
-#13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
-#14 - previous: number of contacts performed before this campaign and for this client (numeric)
-#15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
-# social and economic context attributes
-
-#16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
-clean_bank$int.emp.var.rate<-as.integer(clean_bank$emp.var.rate)
-clean_bank$emp.var.rate <- factor(clean_bank$emp.var.rate)
-#17 - cons.price.idx: consumer price index - monthly indicator (numeric) 
-clean_bank$int.cons.price.idx<-as.integer(clean_bank$cons.price.idx)
-clean_bank$cons.price.idx <- factor(clean_bank$cons.price.idx)
-#18 - cons.conf.idx: consumer confidence index - monthly indicator (numeric) 
-clean_bank$int.cons.conf.idx<-as.integer(clean_bank$cons.conf.idx)
-clean_bank$cons.conf.idx <- factor(clean_bank$cons.conf.idx)
-#19 - euribor3m: euribor 3 month rate - daily indicator (numeric)
-clean_bank$int.euribor3m<-as.integer(clean_bank$euribor3m)
-clean_bank$euribor3m <- factor(clean_bank$euribor3m)
-#20 - nr.employed: number of employees - quarterly indicator (numeric)
-clean_bank$int.nr.employed<-as.integer(clean_bank$nr.employed)
-clean_bank$nr.employed <- factor(clean_bank$nr.employed)
-
-#Output variable (desired target):
-#21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
-clean_bank$y <- factor(clean_bank$y)
-
-clean_bank
-```
 
 # Look into the records where it has unknown - does it have a bunch of unknown in other fields, or is it just in a few (NAs in essence) - Jamie
 ```{r}
@@ -313,7 +234,6 @@ plot(y~day_of_week,col=c("red","blue"))
 
 ```
 
-
 # Other Attributes
 ```{r}
 #campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
@@ -331,6 +251,7 @@ plot(y~poutcome,col=c("red","blue"))
 ```
 
 # Social and Economic Context Attributes
+I'll come back to this... 
 ```{r}
 #emp.var.rate: employment variation rate - quarterly indicator (numeric)
 
@@ -344,3 +265,89 @@ plot(y~poutcome,col=c("red","blue"))
 
 
 ```
+
+# Looking into the test/training split
+
+Down Sampling Pictures: 
+https://www.r-bloggers.com/down-sampling-using-random-forests/
+
+```{r}
+set.seed(123)
+
+bank.yes <- subset(bank, y == "yes")
+bank.no <- subset(bank, y == "no")
+
+#trying to see if putting 80% of Yeses into training set will help better results for test set 
+index.yes<-sample(1:dim(bank.yes)[1],floor(0.80*dim(bank.yes)),replace=F)
+train.yes<-bank.yes[index.yes,]
+test.yes<-bank.yes[-index.yes,]
+
+#50/50% split of No's
+index.no<-sample(1:dim(bank.no)[1],floor(0.5*dim(bank.no)),replace=F)
+train.no<-bank.no[index.no,]
+test.no<-bank.no[-index.no,]
+
+bank.train <- rbind(train.yes, train.no)
+bank.test <- rbind(test.yes, test.no)
+
+#double check to make sure the dimension & % breakouts are correct
+table(bank.train$y)
+table(bank.test$y)
+table(bank$y)
+
+prop.table(table(y,job),2)
+
+#Downsampling... Is it even needed anymore?
+#Train <- downSample(bank,bank$y)
+
+
+#Index.yes<-which(bank$y="yes")
+#train.index<-sample(index.yes,500,replace=F)
+#Train<-dat[c(train.index.yes,train.index.no),]
+
+```
+
+# EDA - Do we want to include PCA here?
+Probably not from my first pass
+```{r PCA}
+pc.result<-prcomp(bank[,c(1,11)],scale.=TRUE)
+pc.scores<-pc.result$x
+pc.scores<-data.frame(pc.scores)
+pc.scores$y<-bank$y
+
+#There is not a clear seperation between these two continuous variables.... the other variables i think are more categorical (cons.price.index, nr.employed, etc...)
+ggplot(data = pc.scores, aes(x = PC1, y = PC2)) +
+  geom_point(aes(col=y), size=1)+
+  ggtitle("PCA of Age & Duration - Bank Data")
+```
+
+```{r VIF}
+
+
+```
+
+
+# First attempt at fitting the model and seeing the confusion matrix
+```{r model step}
+#this isn't running because it times out - why? am i including too many variables?
+# Full Model
+bank.log <- glm(y~., data = bank.train, family = "binomial")
+
+
+# Step  Model
+step.model <- bank.log %>% stepAIC(trace = FALSE)
+summary(step.model) 
+
+# Make predictions
+predict_1 <- step.model %>% predict(bank.test, type = "response")
+predict_2 <- ifelse(predict_1 > 0.14, "yes", "no")
+
+# Model accuracy
+mean(predict_2==bank.test$y)
+summary(predict_1)
+
+# Confusion Matrix
+predTable <- tibble(Predicted = as.factor(predict_2), Observed = bank.test$y)
+confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+```
+
