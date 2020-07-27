@@ -39,7 +39,7 @@ library(ggplot2)
 library(dplyr)
 
 #Grace's connection
-bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/bank-additional-full.csv")
+bank <- read.csv2('../../Data/bank-additional-full.csv')
 
 #Julia's connection
 #setwd('~/Documents/GitHub/Project2_Applied_Stats/Data/')

@@ -17,6 +17,7 @@ The dataset contains all contact attempts to the clients, which can be multiple 
 library(naniar)
 library(ggplot2)
 library(dplyr)
+library(groupdata2)
 
 ```
 
@@ -111,8 +112,7 @@ length(cols.vector)
 
 # loop through the columns in the list and convert to numeric
 for (col.name in cols.vector){
-  df[col.name] <- sapply( df[col.name], as.numeric )
-
+  df[col.name] <- sapply(df[col.name], as.numeric )
 }
 
 ```
@@ -144,6 +144,10 @@ summary(df.prior)
 
 #####New Variable Generation
 ```{r, echo=FALSE}
+# convert 999 in pdays to 0
+df$pdays_0 <- df$pdays
+df$pdays_0[df$pdays_0 == 999] <- 0
+
 
 ```
 
@@ -205,12 +209,12 @@ FULL DATASET: Visual for numeric, color categorized by whether or not the client
 # create matrix plot to determine trends, if any
   # original data
     my_cols <- c("#00AFBB", "#E7B800") 
-    p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
+   # p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
 ```
 MISSING DATA: Visual for numeric, color categorized by whether or not the client participated in term deposit.
 ```{r, echo=FALSE}
   # missing data
-    p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
+   # p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
 
 
 ```
@@ -236,6 +240,43 @@ ggplot(t, aes(x = housing, y=n))+
 
 2.  There are way more No's than Yes for the response variable.  Consider sampling your training data set in such a way that the Yes and No's are more equally balanced.   (This technique is referred to as downsampling.  There is also upsampling.)  After your groups meet and discuss, you can meet with me for a deeper discussion on this issue.
 ```{r, echo=FALSE}
+
+### Split the data into train/test
+#-----------------------------------------------------------------------#
+set.seed(1234)
+
+# set index
+df$ID <- seq.int(nrow(df))
+
+trainingRowIndex <- sample(1:nrow(df), 0.5*nrow(df))  # row indices for training data
+trainingData <- df[trainingRowIndex, ]  # model training data
+trainingsData <- downsample(trainingData, cat_col ='y')
+summary(testData)
+testData  <- df[-trainingsData$ID, ]   # test data
+
+```
+
+```{r}
+### Test feature selection on the training dataset
+#-----------------------------------------------------------------------#
+
+# 1. Creating contigency tables for visual analysis
+xtabs(~housing + y, data = df)
+
+# 2. Testing feature selection
+mylogit <- glm(y ~ ., data = df, family = "binomial") # family indicates that it is a logit 
+summary(mylogit)
+#confint(mylogit)
+
+library(aod)
+# 3. Chi-Squared Test
+wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 40:42)
+
+# 4. odds ratios only
+exp(coef(mylogit))
+
+# 5. odds ratios and 95% CI
+exp(cbind(OR = coef(mylogit), confint(mylogit)))
 
 ```
 
