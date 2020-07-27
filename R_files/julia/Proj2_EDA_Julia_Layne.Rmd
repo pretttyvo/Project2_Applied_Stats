@@ -85,13 +85,14 @@ clean_bank$month <- factor(clean_bank$month)
 clean_bank$day_of_week <- factor(clean_bank$day_of_week)
 #11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
 
+
 # other attributes:
 #12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
 #13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
 #14 - previous: number of contacts performed before this campaign and for this client (numeric)
 #15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
 # social and economic context attributes
-
+clean_bank$poutcome <- factor(clean_bank$poutcome)
 #16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
 clean_bank$int.emp.var.rate<-as.integer(clean_bank$emp.var.rate)
 clean_bank$emp.var.rate <- factor(clean_bank$emp.var.rate)
@@ -121,6 +122,13 @@ int_bank_fields <- c("age","campaign","pdays","previous","int.emp.var.rate","int
 int_bank_fields_y <- c("age","campaign","pdays","previous","int.emp.var.rate","int.cons.price.idx", "int.emp.var.rate","int.cons.price.idx","int.euribor3m","int.nr.employed","y")
 clean_bank[int_bank_fields_y]
 ```
+
+```{r}
+bank_factors <- c("job", "marital", "education","default","housing","loan", "contact", "month", "day_of_week","poutcome","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed","y")
+
+summary(clean_bank[bank_factors])
+```
+
 
 ```{r}
 cols <- character(nrow(clean_bank))
@@ -191,3 +199,51 @@ downSample(clean_bank[int_bank_fields_y],clean_bank[int_bank_fields_y]$y)
 clean_bank[int_bank_fields]
 
 ```
+
+
+
+
+
+
+
+```{r}
+mymat<-matrix(c(76,335,105,302),2,2,byrow=T,dimnames=list(c("Placebo","Vitamin C"),c("No","Yes")))
+mymat
+```
+
+
+```{r}
+field <- "contact"
+fct_y <- c(field, "y")
+factors_in <- levels(clean_bank[c(field)])
+
+factors_in
+
+tele <- filter(clean_bank, contact == 'telephone')
+cell <- filter(clean_bank, contact == 'cellular')
+
+nrow(filter(tele[fct_y], y == 'yes')[c("contact")])
+
+
+tele_yes <- nrow(filter(tele[fct_y], y == 'yes'))
+cell_yes <- nrow(filter(cell[fct_y], y == 'yes'))
+tele_no <- nrow(filter(tele[fct_y], y == 'no'))
+cell_no <- nrow(filter(cell[fct_y], y == 'no'))
+
+matrx_contact <- c( tele_no, tele_yes, cell_no, cell_yes)
+matrx_contact
+```
+
+
+```{r}
+library(epitools)
+#Another way to format a count matrix
+mymat2<-matrix(matrx_contact,2,2,byrow=T)
+dimnames(mymat2)<-list("Treatment"=c("Tele","Cell"),"Response"=c("No","Yes"))
+mymat2
+#Odds Ratio Intervals
+oddsratio.wald(mymat2)
+
+#Relative Risk Intervals
+riskratio.wald(mymat2)
+```  
