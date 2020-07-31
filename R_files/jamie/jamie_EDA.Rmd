@@ -18,6 +18,8 @@ library(naniar)
 library(ggplot2)
 library(dplyr)
 library(groupdata2)
+library(MASS)
+library(tidyverse)
 
 ```
 
@@ -263,10 +265,28 @@ testData  <- df[-trainingsData$ID, ]   # test data
 # 1. Creating contigency tables for visual analysis
 xtabs(~housing + y, data = df)
 
+
 # 2. Testing feature selection
 mylogit <- glm(y ~ ., data = df, family = "binomial") # family indicates that it is a logit 
 summary(mylogit)
 #confint(mylogit)
+
+# -- Run a STEPWISE method
+# Stepwise regression model
+step.model <- stepAIC(mylogit, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+
+# Forward regression model
+forward.model <- stepAIC(mylogit, direction = "forward", 
+                      trace = FALSE)
+summary(forward.model)
+
+
+# Backward regression model
+forward.model <- stepAIC(mylogit, direction = "backward", 
+                      trace = FALSE)
+summary(backward.model)
 
 library(aod)
 # 3. Chi-Squared Test
