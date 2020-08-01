@@ -249,7 +249,6 @@ plot(y~poutcome,col=c("red","blue"))
 ```
 
 # Social and Economic Context Attributes
-I'll come back to this... 
 ```{r}
 #emp.var.rate: employment variation rate - quarterly indicator (numeric)
 plot(emp.var.rate~y,col=c("red","blue"))
@@ -287,7 +286,7 @@ testData  <- bank[-trainingsData$ID, ]   # test data
 ```
 
 
-```{r}
+```{r grace test split}
 set.seed(123)
 
 bank.yes <- subset(bank, y == "yes")
@@ -324,7 +323,7 @@ table(bank$y)
 ```
 # Running initial test in logit model
 ```{r}
-mylogit <- glm(y ~ ., data = bank, family = "binomial") # family indicates that it is a logit 
+mylogit <- glm(y ~ ., data = bank.train, family = "binomial") # family indicates that it is a logit 
 summary(mylogit)
 ```
 Initial run of logit shows the following variables as significant: 
@@ -337,23 +336,21 @@ education , default, poutcome
 #For categorical predictors, the value GVIG^(1/(2*df)) should be squared and interpreted
 #as a usuaul vif type metric.The following code can be used to interpret VIFs like we 
 #discussed in class.
-mylogit_2 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign + pdays + month + contact + age + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank, family = "binomial")
+mylogit_2 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign + pdays + month + contact + age + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
 
 (vif(mylogit_2)[,3])^2
 #removing age & pdays
 
-mylogit_3 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank, family = "binomial")
+mylogit_3 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
 (vif(mylogit_3)[,3])^2
 
 ```
 # Residual Plots
 ```{r}
-#Residual diagnostics can be obtained using
 plot(mylogit_2)
 plot(mylogit_3)
 
-#The only plot worth examining here is the fourth/final one that allows you to examine levaeage and cooks d.  You read this 
-#just like the MLR one.
+#The only plot worth examining here is the fourth/final one that allows you to examine levaeage and cooks d.  You read this just like the MLR one.
 ```
 
 # Looking at accuracy of mylogit_3 
@@ -375,12 +372,14 @@ confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 
 #          Reference
 #Prediction    no   yes
-#       no  15526    90
-#       yes  2748   838
+#        no  14727    45
+#       yes  3547   883
+# 81 % Accuracy
 
 #Step Selected Model - run on mylogit, and didnt see the accuracy rate improve
 step.model <- mylogit %>% stepAIC(trace=FALSE)
-summary(step.model)
+summary(step.model) 
+
 probabilities <- step.model %>% predict(bank.test, type = "response")
 predicted.classes <- ifelse(probabilities < 0.11, "no", "yes")
 mean(predicted.classes==bank.test$y)
@@ -390,11 +389,33 @@ predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.te
 confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 #          Reference
 #Prediction    no   yes
-#       no  15524    92
-#       yes  2750   836
-                           
-```
+#       no  14721    50
+ #      yes  3553   878
+         #            .8124  
+step(mylogit,
+     direction="forward",
+     test="Chisq",
+     data=bank.test) #why is it not stepping down and removing any predictors?
+hoslem.test(mylogit_3$y, fitted(mylogit_3), g=10) 
 
+step(mylogit,
+     direction="backward",
+     test="Chisq",
+     data=bank.test) #why is it not stepping down and removing any predictors?
+
+#Step:  AIC=11427
+summary(glm(formula = y ~ age + education + default + contact + month + 
+    day_of_week + duration + campaign + pdays + poutcome + emp.var.rate + 
+    cons.price.idx + nr.employed + pdays_0 + agebucket, family = "binomial", 
+    data = bank.train))
+```
+```{r test train split}
+library(glmnet)
+mylogit_train <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
+
+cvfit <- cv.glmnet(mylogit_train, bank.test, family = "binomial", type.measure = "class", nlambda = 10)
+
+```
 
 # EDA - Do we want to include PCA here?
 Probably not from my first pass - can PCAs take categorical vs continuous?
