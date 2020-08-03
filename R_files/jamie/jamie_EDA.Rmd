@@ -294,6 +294,7 @@ STEPWISE
 # -- Run a STEPWISE method
 # Stepwise regression model - AIC: 1525.3
 #step.log<-mylogit %>% stepAIC(trace=FALSE)
+
 step.log<-mylogit %>% stepAIC(trace=FALSE)
 step.model <- stepAIC(mylogit, direction = "both", 
                       trace = FALSE)
@@ -372,7 +373,54 @@ logit.test <- glm(y ~ #job
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.test)
 ```
+CUSTOM 
+```{r}
+# Base the model off of stepwise regression
+#summary(step.log)
 
+# create new columns to replace old columns
+df.newvar <- df
+#colnames(df.newvar)
+
+
+df.newvar$education_0 <- df.newvar$education
+df.newvar$education_0[df.newvar$education_0 != "university.degree"] <- "unknown"
+df.newvar$job_0 <- df.newvar$job
+df.newvar$job_0[df.newvar$job_0 != "blue-collar"] <- "unknown"
+months <- list("aug", "may", "nov")
+df.newvar$month_0 <- "1"
+`%notin%` <- Negate(`%in%`)
+df.newvar$month_0[df.newvar$month %notin% months] <- "0"
+
+
+#sapply(df.newvar, function(x) sum(is.na(x)))
+
+#summary(df.newvar)
+
+trainingRowIndex <- sample(1:nrow(df.newvar), 0.25*nrow(df.newvar))  # row indices for training data
+trainingData <- df.newvar[trainingRowIndex, ]
+testData  <- df.newvar[-trainingsData$ID, ]
+train.data <- trainingData[ , -which(names(trainingData) %in% c("pdays","ID", "education", "job", "month"))]
+test.data <- testData[ , -which(names(testData) %in% c("pdays","ID", "education", "job", "month"))]
+
+mylog <- glm(y ~ ., data = train.data, family = "binomial") # family indicates that it is a logit 
+steps <- stepAIC(mylog, direction = "both", 
+                      trace = FALSE)
+# final stepwise model - AIC: 1525.3
+summary(steps)
+colnames(test.data)
+colnames(train.data)
+fit <- as.data.frame(predict(steps, test.data, type="response"))
+
+class.steps<-factor(ifelse(fit>0.017,"no","yes"),levels=c("no","yes"))
+conf.step<-confusionMatrix(class.steps,test.data$y)
+print("Confusion matrix for Stepwise")
+conf.step
+
+
+```
+
+ROC CURVES
 ```{r}
 # 3. ROC Curves
 
