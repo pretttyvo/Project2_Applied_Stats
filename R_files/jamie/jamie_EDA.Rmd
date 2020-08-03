@@ -20,6 +20,7 @@ library(dplyr)
 library(groupdata2)
 library(MASS)
 library(tidyverse)
+library(ROCR)
 
 ```
 
@@ -150,7 +151,6 @@ summary(df.prior)
 df$pdays_0 <- df$pdays
 df$pdays_0[df$pdays_0 == 999] <- 0
 
-
 ```
 
 ##### Handling of Missing Logistics
@@ -245,15 +245,16 @@ ggplot(t, aes(x = housing, y=n))+
 
 ### Split the data into train/test
 #-----------------------------------------------------------------------#
-set.seed(1234)
 
+set.seed(1234)
+colnames(df)
 # set index
 df$ID <- seq.int(nrow(df))
 
-trainingRowIndex <- sample(1:nrow(df), 0.5*nrow(df))  # row indices for training data
+trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
 trainingData <- df[trainingRowIndex, ]  # model training data
 trainingsData <- downsample(trainingData, cat_col ='y')
-summary(testData)
+summary(trainingsData)
 testData  <- df[-trainingsData$ID, ]   # test data
 
 ```
@@ -261,33 +262,70 @@ testData  <- df[-trainingsData$ID, ]   # test data
 ```{r}
 ### Test feature selection on the training dataset
 #-----------------------------------------------------------------------#
+# drop insignificant columns
+colnames(df)
+
+trainingsData <- trainingsData[ , -which(names(trainingsData) %in% c("pdays","ID"))]
 
 # 1. Creating contigency tables for visual analysis
 xtabs(~housing + y, data = df)
 
 
 # 2. Testing feature selection
-mylogit <- glm(y ~ ., data = df, family = "binomial") # family indicates that it is a logit 
-summary(mylogit)
-#confint(mylogit)
 
+# raw logit - AIC: 1554.9
+mylogit <- glm(y ~ ., data = trainingsData, family = "binomial") # family indicates that it is a logit 
+summary(mylogit)
+
+# final logit original - AIC: 2559.1
+logit.og <- glm(y ~ job + education + contact + month + 
+                  day_of_week + campaign + poutcome + 
+                  cons.price.idx  + nr.employed, 
+                data = trainingsData, family = "binomial") # final logit model - no fitting
+summary(logit.og)
+#confint(mylogit)
+```
+STEPWISE
+```{r}
 # -- Run a STEPWISE method
-# Stepwise regression model
+# Stepwise regression model - AIC: 1525.3
+#step.log<-mylogit %>% stepAIC(trace=FALSE)
 step.model <- stepAIC(mylogit, direction = "both", 
                       trace = FALSE)
-summary(step.model)
-
+# final stepwise model - AIC: 1525.3
+logit.step <- glm(y ~ education + month + poutcome + 
+                  emp.var.rate  + duration + cons.price.idx  + nr.employed, 
+                data = trainingsData, family = "binomial") # final logit model - no fitting
+summary(logit.step)
+```
+FORWARD
+```{r}
 # Forward regression model
 forward.model <- stepAIC(mylogit, direction = "forward", 
                       trace = FALSE)
-summary(forward.model)
 
+# final forward regression - AIC: 1530.3
+logit.forward <- glm(y ~ age + job + month + 
+                  duration + cons.price.idx  + 
+                  nr.employed + poutcome, 
+                data = trainingsData, family = "binomial") # final logit model - no fitting
+summary(logit.forward)
 
+```
+BACKWARDS
+```{r}
 # Backward regression model
-forward.model <- stepAIC(mylogit, direction = "backward", 
+backward.model <- stepAIC(mylogit, direction = "backward", 
                       trace = FALSE)
-summary(backward.model)
+# final backward regression - AIC: 2555.9
+logit.backward <- glm(y ~ education + month + 
+                        poutcome + emp.var.rate + 
+                        cons.price.idx + nr.employed, 
+                data = trainingsData, family = "binomial") # final logit model - no fitting
+summary(logit.backward)
+```
 
+```{r}
 library(aod)
 # 3. Chi-Squared Test
 wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 40:42)
@@ -297,6 +335,22 @@ exp(coef(mylogit))
 
 # 5. odds ratios and 95% CI
 exp(cbind(OR = coef(mylogit), confint(mylogit)))
+
+
+# 6 ROC 
+?prediction
+
+fit.pred.lasso <- predict(logit.og, 
+                          newx = testData[ , -which(names(testData) %in% c("y","pdays","ID"))], 
+                          type = "response")
+colnames(testDatax)
+(fit.pred.lasso)
+testData <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
+
+results.lasso<-prediction(fit.pred.lasso[0:1000], testData$y[0:1000],label.ordering=c("yes","no"))
+roc.lasso = performance(results.lasso, measure = "tpr", x.measure = "fpr")
+plot(roc.lasso,colorize = TRUE)
+abline(a=0, b= 1)
 
 ```
 
