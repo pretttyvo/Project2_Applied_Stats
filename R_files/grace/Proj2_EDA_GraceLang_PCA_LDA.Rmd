@@ -63,50 +63,14 @@ bank$ID <- seq.int(nrow(bank))
 trainingRowIndex <- sample(1:nrow(bank), 0.5*nrow(bank))  # row indices for training data
 trainingData <- bank[trainingRowIndex, ]  # model training data
 trainingsData <- downsample(trainingData, cat_col ='y')
-summary(trainingsData)
+#summary(trainingsData)
 testData  <- bank[-trainingsData$ID, ]   # test data
 ```
 
-
-```{r grace test split}
-set.seed(123)
-
-bank.yes <- subset(bank, y == "yes")
-bank.no <- subset(bank, y == "no")
-
-#trying to see if putting 80% of Yeses into training set will help better results for test set 
-index.yes<-sample(1:dim(bank.yes)[1],floor(0.80*dim(bank.yes)),replace=F)
-train.yes<-bank.yes[index.yes,]
-test.yes<-bank.yes[-index.yes,]
-
-#50/50% split of No's
-index.no<-sample(1:dim(bank.no)[1],floor(0.5*dim(bank.no)),replace=F)
-train.no<-bank.no[index.no,]
-test.no<-bank.no[-index.no,]
-
-bank.train <- rbind(train.yes, train.no)
-bank.test <- rbind(test.yes, test.no)
-
-#double check to make sure the dimension & % breakouts are correct
-table(bank.train$y)
-table(bank.test$y)
-table(bank$y)
-
-#prop.table(table(y,job),2)
-
-#Downsampling... Is it even needed anymore?
-#Train <- downSample(bank,bank$y)
-
-
-#Index.yes<-which(bank$y="yes")
-#train.index<-sample(index.yes,500,replace=F)
-#Train<-dat[c(train.index.yes,train.index.no),]
-
-```
 # Running initial test in logit model
 ```{r}
 mylogit <- glm(y ~ ., data = bank.train, family = "binomial") # family indicates that it is a logit 
-summary(mylogit)
+#summary(mylogit)
 ```
 Initial run of logit shows the following variables as significant: 
 nr.employed , cons.price.idx , duration , campaign , pdays  , month , contacttelephone , age , job
@@ -134,17 +98,32 @@ plot(mylogit_3)
 
 #The only plot worth examining here is the fourth/final one that allows you to examine levaeage and cooks d.  You read this just like the MLR one.
 ```
-
-# Looking at accuracy of mylogit_3 
-Do I even need to use the step.model if I already used VIF as a CV?
-```{r}
+*********************************************************
+  ## LOGISTIC REGRESSION, WITH SOME VARIABLES REMOVED
+*********************************************************
+# Looking at ROC of mylogit_3 
+    Do I even need to use the step.model if I already used VIF as a CV?
+```{r logistic ROC}
 #Make predictions
-probabilities <- mylogit_3 %>% predict(bank.test, type = "response")
-predicted.classes <- ifelse(probabilities < 0.11, "no", "yes")
+pred.log <- as.data.frame(predict(mylogit_3, newdata=bank.test))
+
+#capture predictions
+pred.log3 <- prediction(pred.log,bank.test$y)
+
+#Plot the ROC curve to determine cutoff
+roc.log.perf = performance(pred.log3, measure = "tpr", x.measure = "fpr")
+roc.train <- performance(pred.log3, measure = "auc")
+roc.train <- roc.train@y.values
+plot(roc.log.perf, colorize = TRUE)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(roc.train[[1]],3), sep = ""))
+
+#determine the cutoff for the confusion matrix
+predicted.classes <- ifelse(pred.log < 0.1, "no", "yes") # 0.1= cutoff of confusion matrix
 
 # Model accuracy
 mean(predicted.classes==bank.test$y)
-summary(probabilities)
+summary(pred.log)
 
 # Create table for conjfusion Matrix
 predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.test$y)
@@ -154,50 +133,92 @@ confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 
 #          Reference
 #Prediction    no   yes
-#        no  14727    45
-#       yes  3547   883
-# 81 % Accuracy
+#       no  17592   459
+#       yes   682   469
+                        
+# 94 % Accuracy
+            #Sensitivity : 0.9627          
+            #Specificity : 0.5054
+```
+
+```{r step}
+###AIC: 11416
+#Call:
+#glm(formula = y ~ education + default + contact + month + day_of_week + 
+#    duration + campaign + pdays + previous + poutcome + emp.var.rate + 
+#    cons.price.idx + cons.conf.idx + euribor3m + nr.employed + 
+#    pdays_0 + agebucket + ID, family = "binomial", data = bank.train)
 
 #Step Selected Model - run on mylogit, and didnt see the accuracy rate improve
 step.model <- mylogit %>% stepAIC(trace=FALSE)
-summary(step.model) 
 
-probabilities <- step.model %>% predict(bank.test, type = "response")
-predicted.classes <- ifelse(probabilities < 0.11, "no", "yes")
-mean(predicted.classes==bank.test$y)
-summary(probabilities)
-predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.test$y)
+#Make predictions
+pred.step <- as.data.frame(predict(step.model, newdata=bank.test))
 
-confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+#capture predictions
+predict.step <- prediction(pred.step,bank.test$y)
+
+#Plot the ROC curve to determine cutoff
+roc.step.perf = performance(predict.step, measure = "tpr", x.measure = "fpr")
+roc.step.train <- performance(predict.step, measure = "auc")
+roc.step.train <- roc.step.train@y.values
+plot(roc.step.perf, colorize = TRUE)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(roc.step.train[[1]],3), sep = ""))
+
+#determine the cutoff for the confusion matrix
+predicted.step.classes <- ifelse(pred.log < 0.2, "no", "yes") # 0.1= cutoff of confusion matrix
+
+# Model accuracy
+mean(predicted.step.classes==bank.test$y)
+
+# Create table for conjfusion Matrix
+predTable.step <- tibble(Predicted = as.factor(predicted.step.classes), Observed = bank.test$y)
+
+#Confusion Matrix
+confusionMatrix(predTable.step$Predicted, reference = predTable.step$Observed)
+
 #          Reference
 #Prediction    no   yes
-#       no  14721    50
- #      yes  3553   878
-         #            .8124  
-step(mylogit,
-     direction="forward",
-     test="Chisq",
-     data=bank.test) #why is it not stepping down and removing any predictors?
-hoslem.test(mylogit_3$y, fitted(mylogit_3), g=10) 
+#       no  17617   471
+#       yes   657   457
+                                          
+#               Accuracy : 0.9413  
+#            Sensitivity : 0.9640          
+#            Specificity : 0.4925 
+```
 
-step(mylogit,
-     direction="backward",
-     test="Chisq",
-     data=bank.test) #why is it not stepping down and removing any predictors?
+# Not sure if i still need this chunk
+```{r}
+#step(mylogit,
+#     direction="forward",
+#     test="Chisq",
+#     data=bank.test) #why is it not stepping down and removing any predictors?
+#hoslem.test(mylogit_3$y, fitted(mylogit_3), g=10) 
+
+#step(mylogit,
+#     direction="backward",
+#     test="Chisq",
+#     data=bank.test) #why is it not stepping down and removing any predictors?
 
 #Step:  AIC=11427
-summary(glm(formula = y ~ age + education + default + contact + month + 
-    day_of_week + duration + campaign + pdays + poutcome + emp.var.rate + 
-    cons.price.idx + nr.employed + pdays_0 + agebucket, family = "binomial", 
-    data = bank.train))
+##summary(glm(formula = y ~ age + education + default + contact + month + 
+#    day_of_week + duration + campaign + pdays + poutcome + emp.var.rate + 
+#    cons.price.idx + nr.employed + pdays_0 + agebucket, family = "binomial", 
+#    data = bank.train))
+
 ```
+
+
 ```{r test train split}
 library(glmnet)
 mylogit_train <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
 
 cvfit <- cv.glmnet(mylogit_train, bank.test, family = "binomial", type.measure = "class", nlambda = 10)
 ```
-
+****************************************
+  ## PCA
+****************************************
 # Setting up test/training for just the continuous variables to look at PCA
 ```{r}
 test.pca <- testData[,c(1,11:14,16:20)]
@@ -229,23 +250,26 @@ ggplot(data = pc.scores, aes(x = PC2, y = PC3)) +
 
 #This one shows promise
 ggplot(data = pc.scores, aes(x = PC2, y = PC4)) +
-  geom_point(aes(col=y), size=1)+
+  geom_point(aes(col=y), size=0.5)+
   ggtitle("PCA of Bank Data")
 
-ggplot(data = pc.scores, aes(x = PC2, y = PC5)) +
-  geom_point(aes(col=y), size=1)+
+ggplot(data = pc.scores, aes(x = PC4, y = PC5)) +
+  geom_point(aes(col=y), size=0.5)+
   ggtitle("PCA of Bank Data")
 
 ggplot(data = bank, aes(x = age, y = duration)) +
   geom_point(aes(col=y), size=1)+
   ggtitle("Age & Duration - Bank Data")
 
+#make points finer
 ```
 # See if PCA prediction is any better within logistic? Do we even do that?
 ```{r}
 
 ```
-
+****************************************
+  ## LDA
+****************************************
 # LDA
 Create another competing model using just the continuous predictors and use LDA or QDA
 ```{r}
@@ -266,9 +290,15 @@ pred.lda <- prediction(pred.lda[,2],test.lda$y)
 roc.perf = performance(pred.lda, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred.lda, measure = "auc")
 auc.train <- auc.train@y.values
-plot(roc.perf)
+plot(roc.perf, colorize = TRUE)
 abline(a=0, b= 1)
 text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+#Add in a confusion matrix?
+predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.test$y)
+
+#Confusion Matrix
+confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 
 
 #Saving in case i have to use later 
@@ -280,5 +310,5 @@ text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 #train.lda[train.lda$y == "yes" ,"response"] <- 1 
 #train.lda <- subset(train.lda[,c(1:10,12)])
 ```
-```
+
 
