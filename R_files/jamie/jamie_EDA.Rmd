@@ -23,6 +23,7 @@ library(tidyverse)
 library(ROCR)
 library(glmnet)
 library(aod)
+library(caret)
 
 ```
 
@@ -255,6 +256,8 @@ df$ID <- seq.int(nrow(df))
 
 trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
 trainingData <- df[trainingRowIndex, ]  # model training data
+summary(trainingData)
+summary(trainingsData)
 trainingsData <- downsample(trainingData, cat_col ='y')
 testData  <- df[-trainingsData$ID, ]   # test data
 
@@ -267,7 +270,7 @@ testData  <- df[-trainingsData$ID, ]   # test data
 colnames(df)
 
 trainingsData2 <- trainingsData[ , -which(names(trainingsData) %in% c("pdays","ID"))]
-
+summary(trainingsData2)
 # 1. Creating contigency tables for visual analysis
 xtabs(~housing + y, data = df)
 
@@ -291,13 +294,14 @@ STEPWISE
 # -- Run a STEPWISE method
 # Stepwise regression model - AIC: 1525.3
 #step.log<-mylogit %>% stepAIC(trace=FALSE)
+step.log<-mylogit %>% stepAIC(trace=FALSE)
 step.model <- stepAIC(mylogit, direction = "both", 
                       trace = FALSE)
 # final stepwise model - AIC: 1525.3
 logit.step <- glm(y ~ education + month + poutcome + 
                   emp.var.rate  + duration + cons.price.idx  + nr.employed, 
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
-summary(logit.step)
+summary(step.log)
 ```
 FORWARD
 ```{r}
@@ -345,9 +349,9 @@ cvfit$lambda.min
 #For final model predictions go ahead and refit lasso using entire
 #data set
 
-finalmodel<-glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
+logit.lasso<-glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
 colnames(trainingsData2)
-coef(finalmodel)
+coef(logit.lasso)
 
 logit.test <- glm(y ~ #job 
                   #+ marital 
@@ -381,7 +385,7 @@ fit.pred.forward <- as.data.frame(predict(logit.forward, testData2, type="respon
 fit.pred.backward <- as.data.frame(predict(logit.backward, testData2, type="response"))
 
 dat.test.x<-model.matrix(y~.,testData2)
-fit.pred.lasso <- predict(finalmodel, newx = dat.test.x, type = "response")
+fit.pred.lasso <- predict(logit.lasso, newx = dat.test.x, type = "response")
 
 # predictions
 results.og<-prediction(fit.pred.og, testData2$y,label.ordering=c("no","yes"))
@@ -422,7 +426,7 @@ text(x = .80, y = .45,paste("Lasso AUC = ", round(auc_ROCR.lasso,3), sep = ""))
 ```
 According to the AUC of the ROC curves, Lasso appears to have an upper hand.
 
-Comparing AIC and AUC
+##### Comparing AIC and AUC
 ```{r}
 models <- c("original", "stepwise", "forward", "backwarc", "lasso")
 AICs <- c(2559.1, 1525.3, 1530.3, 2555.9, 1542.8)
@@ -438,7 +442,7 @@ According to the AUC, stepwise, forward, and Lasso have the highest area under t
 
 While the AIC of the three models are relatively close, stepwise is the lowest of the 5 models tested. 
 
-Statistics
+##### Ratio Statistics
 ```{r}
 
 # 4. odds ratios only
@@ -448,6 +452,37 @@ exp(coef(logit.step))
 exp(cbind(OR = coef(logit.step), confint(logit.step)))
 
 ```
+Cut off selection
+```{r}
+
+cutoff<-0.3
+class.lasso<-factor(ifelse(fit.pred.lasso>cutoff,"no","yes"),levels=c("no","yes"))
+class.step<-factor(ifelse(fit.pred.step>cutoff,"no","yes"),levels=c("no","yes"))
+class.back<-factor(ifelse(fit.pred.backward>cutoff,"no","yes"),levels=c("no","yes"))
+class.f<-factor(ifelse(fit.pred.forward>cutoff,"no","yes"),levels=c("no","yes"))
+class.o<-factor(ifelse(fit.pred.og>cutoff,"no","yes"),levels=c("no","yes"))
+
+#Confusion Matrix for Lasso
+conf.lasso<-confusionMatrix(class.lasso,testData2$y)
+print("Confusion matrix for LASSO")
+conf.lasso
+conf.step<-confusionMatrix(class.step,testData2$y)
+print("Confusion matrix for Stepwise")
+conf.step
+conf.o<-confusionMatrix(class.o,testData2$y)
+print("Confusion matrix for Original")
+conf.o
+conf.f<-confusionMatrix(class.f,testData2$y)
+print("Confusion matrix for Forward")
+conf.f
+
+print("Overall accuracy for LASSO and Stepwise respectively")
+# mean(class.lasso==testData2$y)
+mean(class.step==testData2$y)
+summary(testData2$y)
+```
+
+
 3.  Of course EDA.  PCA_Unit9 R script has some potential starting graphics you can sift through as well as doing some PCA.  We'll discuss additional strategies in later units.  Don't forget summary statistics.  
 ```{r, echo=FALSE}
 
