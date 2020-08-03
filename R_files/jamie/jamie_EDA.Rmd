@@ -21,6 +21,8 @@ library(groupdata2)
 library(MASS)
 library(tidyverse)
 library(ROCR)
+library(glmnet)
+library(aod)
 
 ```
 
@@ -254,7 +256,6 @@ df$ID <- seq.int(nrow(df))
 trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
 trainingData <- df[trainingRowIndex, ]  # model training data
 trainingsData <- downsample(trainingData, cat_col ='y')
-summary(trainingsData)
 testData  <- df[-trainingsData$ID, ]   # test data
 
 ```
@@ -265,7 +266,7 @@ testData  <- df[-trainingsData$ID, ]   # test data
 # drop insignificant columns
 colnames(df)
 
-trainingsData <- trainingsData[ , -which(names(trainingsData) %in% c("pdays","ID"))]
+trainingsData2 <- trainingsData[ , -which(names(trainingsData) %in% c("pdays","ID"))]
 
 # 1. Creating contigency tables for visual analysis
 xtabs(~housing + y, data = df)
@@ -274,14 +275,14 @@ xtabs(~housing + y, data = df)
 # 2. Testing feature selection
 
 # raw logit - AIC: 1554.9
-mylogit <- glm(y ~ ., data = trainingsData, family = "binomial") # family indicates that it is a logit 
+mylogit <- glm(y ~ ., data = trainingsData2, family = "binomial") # family indicates that it is a logit 
 summary(mylogit)
 
 # final logit original - AIC: 2559.1
 logit.og <- glm(y ~ job + education + contact + month + 
                   day_of_week + campaign + poutcome + 
                   cons.price.idx  + nr.employed, 
-                data = trainingsData, family = "binomial") # final logit model - no fitting
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.og)
 #confint(mylogit)
 ```
@@ -295,7 +296,7 @@ step.model <- stepAIC(mylogit, direction = "both",
 # final stepwise model - AIC: 1525.3
 logit.step <- glm(y ~ education + month + poutcome + 
                   emp.var.rate  + duration + cons.price.idx  + nr.employed, 
-                data = trainingsData, family = "binomial") # final logit model - no fitting
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.step)
 ```
 FORWARD
@@ -308,7 +309,7 @@ forward.model <- stepAIC(mylogit, direction = "forward",
 logit.forward <- glm(y ~ age + job + month + 
                   duration + cons.price.idx  + 
                   nr.employed + poutcome, 
-                data = trainingsData, family = "binomial") # final logit model - no fitting
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.forward)
 
 ```
@@ -321,40 +322,132 @@ backward.model <- stepAIC(mylogit, direction = "backward",
 logit.backward <- glm(y ~ education + month + 
                         poutcome + emp.var.rate + 
                         cons.price.idx + nr.employed, 
-                data = trainingsData, family = "binomial") # final logit model - no fitting
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.backward)
+```
+LASSO
+
+```{r}
+
+dat.train.x <- model.matrix(y~.,trainingsData2)
+dat.train.y<-trainingsData2[,20]
+cvfit <- cv.glmnet(dat.train.x, dat.train.y, family = "binomial", type.measure = "class", nlambda = 1000)
+plot(cvfit)
+coef(cvfit, s = "lambda.min")
+#CV misclassification error rate is little below .1
+print("CV Error Rate:")
+cvfit$cvm[which(cvfit$lambda==cvfit$lambda.min)]
+
+#Optimal penalty
+print("Penalty Value:")
+cvfit$lambda.min
+
+#For final model predictions go ahead and refit lasso using entire
+#data set
+
+finalmodel<-glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
+colnames(trainingsData2)
+coef(finalmodel)
+
+logit.test <- glm(y ~ #job 
+                  #+ marital 
+                  #+ housing 
+                   education 
+                  #+ default 
+                  #+ contact 
+                  + month
+                  #+ day_of_week 
+                  + duration 
+                  #+ campaign 
+                  + poutcome 
+                  + emp.var.rate 
+                  + cons.conf.idx 
+                  + cons.price.idx 
+                  + nr.employed 
+                  , 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(logit.test)
 ```
 
 ```{r}
-library(aod)
-# 3. Chi-Squared Test
-wald.test(b = coef(mylogit), Sigma = vcov(mylogit), Terms = 40:42)
+# 3. ROC Curves
 
-# 4. odds ratios only
-exp(coef(mylogit))
+testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
 
-# 5. odds ratios and 95% CI
-exp(cbind(OR = coef(mylogit), confint(mylogit)))
+# predict
+fit.pred.og <- as.data.frame(predict(logit.og, testData2, type="response"))
+fit.pred.step <- as.data.frame(predict(logit.step, testData2, type="response"))
+fit.pred.forward <- as.data.frame(predict(logit.forward, testData2, type="response"))
+fit.pred.backward <- as.data.frame(predict(logit.backward, testData2, type="response"))
 
+dat.test.x<-model.matrix(y~.,testData2)
+fit.pred.lasso <- predict(finalmodel, newx = dat.test.x, type = "response")
 
-# 6 ROC 
-?prediction
+# predictions
+results.og<-prediction(fit.pred.og, testData2$y,label.ordering=c("no","yes"))
+results.step<-prediction(fit.pred.step, testData2$y,label.ordering=c("no","yes"))
+results.forward<-prediction(fit.pred.forward, testData2$y,label.ordering=c("no","yes"))
+results.backward<-prediction(fit.pred.backward, testData2$y,label.ordering=c("no","yes"))
+results.lasso<-prediction(fit.pred.lasso, testData2$y,label.ordering=c("no","yes"))
 
-fit.pred.lasso <- predict(logit.og, 
-                          newx = testData[ , -which(names(testData) %in% c("y","pdays","ID"))], 
-                          type = "response")
-colnames(testDatax)
-(fit.pred.lasso)
-testData <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
-
-results.lasso<-prediction(fit.pred.lasso[0:1000], testData$y[0:1000],label.ordering=c("yes","no"))
+#performance
+roc.og = performance(results.og, measure = "tpr", x.measure = "fpr")
+roc.step = performance(results.step, measure = "tpr", x.measure = "fpr")
+roc.forward = performance(results.forward, measure = "tpr", x.measure = "fpr")
+roc.backward = performance(results.backward, measure = "tpr", x.measure = "fpr")
 roc.lasso = performance(results.lasso, measure = "tpr", x.measure = "fpr")
-plot(roc.lasso,colorize = TRUE)
+
+# get AUC
+auc_ROCR <- performance(results.og, measure = "auc")@y.values[[1]]
+auc_ROCR.step <- performance(results.step, measure = "auc")@y.values[[1]]
+auc_ROCR.forward <- performance(results.forward, measure = "auc")@y.values[[1]]
+auc_ROCR.backward <- performance(results.backward, measure = "auc")@y.values[[1]]
+auc_ROCR.lasso <- performance(results.lasso, measure = "auc")@y.values[[1]]
+
+# plot
+plot(roc.og)
+plot(roc.step,add = TRUE, col = "orange")
+plot(roc.forward, add = TRUE, col= "blue")
+plot(roc.backward, add = TRUE, col="red")
+plot(roc.lasso,add = TRUE, col="yellow")
+legend("bottomright",legend=c("Original","Stepwise","Forward", "Backward", "Lasso"),
+       col=c("black","orange","blue", "red", "yellow"),lty=1,lwd=1)
 abline(a=0, b= 1)
+text(x = .80, y = .85,paste("Original AUC = ", round(auc_ROCR,3), sep = ""))
+text(x = .80, y = .75,paste("Step AUC = ", round(auc_ROCR.step,3), sep = ""))
+text(x = .80, y = .65,paste("Forward AUC = ", round(auc_ROCR.forward,3), sep = ""))
+text(x = .80, y = .55,paste("Backward AUC = ", round(auc_ROCR.backward,3), sep = ""))
+text(x = .80, y = .45,paste("Lasso AUC = ", round(auc_ROCR.lasso,3), sep = ""))
 
 ```
+According to the AUC of the ROC curves, Lasso appears to have an upper hand.
+
+Comparing AIC and AUC
+```{r}
+models <- c("original", "stepwise", "forward", "backwarc", "lasso")
+AICs <- c(2559.1, 1525.3, 1530.3, 2555.9, 1542.8)
+AUCs <- c(round(auc_ROCR,3),round(auc_ROCR.step,3),round(auc_ROCR.forward,3),round(auc_ROCR.backward,3),round(auc_ROCR.lasso,3))
+
+data <- list(model = models, AIC = AICs, AUC = AUCs)
+
+model.stats <- as.data.frame(data)
 
 
+```
+According to the AUC, stepwise, forward, and Lasso have the highest area under the curve. 
+
+While the AIC of the three models are relatively close, stepwise is the lowest of the 5 models tested. 
+
+Statistics
+```{r}
+
+# 4. odds ratios only
+exp(coef(logit.step))
+
+# 5. odds ratios and 95% CI
+exp(cbind(OR = coef(logit.step), confint(logit.step)))
+
+```
 3.  Of course EDA.  PCA_Unit9 R script has some potential starting graphics you can sift through as well as doing some PCA.  We'll discuss additional strategies in later units.  Don't forget summary statistics.  
 ```{r, echo=FALSE}
 
