@@ -69,7 +69,7 @@ testData  <- bank[-trainingsData$ID, ]   # test data
 
 # Running initial test in logit model
 ```{r}
-mylogit <- glm(y ~ ., data = bank.train, family = "binomial") # family indicates that it is a logit 
+mylogit <- glm(y ~ ., data = trainingsData, family = "binomial") # family indicates that it is a logit 
 #summary(mylogit)
 ```
 Initial run of logit shows the following variables as significant: 
@@ -82,12 +82,12 @@ education , default, poutcome
 #For categorical predictors, the value GVIG^(1/(2*df)) should be squared and interpreted
 #as a usuaul vif type metric.The following code can be used to interpret VIFs like we 
 #discussed in class.
-mylogit_2 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign + pdays + month + contact + age + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
+mylogit_2 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign + pdays + month + contact + age + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = trainingsData, family = "binomial")
 
 (vif(mylogit_2)[,3])^2
 #removing age & pdays
 
-mylogit_3 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = bank.train, family = "binomial")
+mylogit_3 <- glm(y ~ nr.employed + cons.price.idx + duration + campaign  + month + contact  + job +education +default + pdays_0 + agebucket + day_of_week +poutcome, data = trainingsData, family = "binomial")
 (vif(mylogit_3)[,3])^2
 
 ```
@@ -105,10 +105,10 @@ plot(mylogit_3)
     Do I even need to use the step.model if I already used VIF as a CV?
 ```{r logistic ROC}
 #Make predictions
-pred.log <- as.data.frame(predict(mylogit_3, newdata=bank.test))
+pred.log <- as.data.frame(predict(mylogit_3, newdata=testData))
 
 #capture predictions
-pred.log3 <- prediction(pred.log,bank.test$y)
+pred.log3 <- prediction(pred.log,testData$y)
 
 #Plot the ROC curve to determine cutoff
 roc.log.perf = performance(pred.log3, measure = "tpr", x.measure = "fpr")
@@ -126,7 +126,7 @@ mean(predicted.classes==bank.test$y)
 summary(pred.log)
 
 # Create table for conjfusion Matrix
-predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.test$y)
+predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = testData$y)
 
 #Confusion Matrix
 confusionMatrix(predTable$Predicted, reference = predTable$Observed)
@@ -287,15 +287,22 @@ pred.lda <- as.data.frame(pred$posterior)
 pred.lda <- prediction(pred.lda[,2],test.lda$y)
 
 #Plot the ROC curve
-roc.perf = performance(pred.lda, measure = "tpr", x.measure = "fpr")
-auc.train <- performance(pred.lda, measure = "auc")
-auc.train <- auc.train@y.values
-plot(roc.perf, colorize = TRUE)
+roc.perf.lda = performance(pred.lda, measure = "tpr", x.measure = "fpr")
+auc.train.lda <- performance(pred.lda, measure = "auc")
+auc.train.lda <- auc.train.lda@y.values
+plot(roc.perf.lda, colorize = TRUE)
 abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.train.lda,3), sep = ""))
+
+## Not sure how to create a confusion from a continuous
+# Create table for confusion Matrix
+predTable.LDA <- tibble(Predicted = pred.lda, Observed = bank.test$y)
+
+#Confusion Matrix
+confusionMatrix(predTable.LDA$Predicted, reference = predTable.LDA$Observed)
 
 #Add in a confusion matrix?
-predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = bank.test$y)
+predTable <- tibble(Predicted = as.data.frame(pred.lda), Observed = bank.test$y)
 
 #Confusion Matrix
 confusionMatrix(predTable$Predicted, reference = predTable$Observed)
@@ -310,5 +317,50 @@ confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 #train.lda[train.lda$y == "yes" ,"response"] <- 1 
 #train.lda <- subset(train.lda[,c(1:10,12)])
 ```
+# LDA w/ PCA variables
+Running an LDA on the PCA variables
+```{r pca on lda}
+pc.result<-prcomp(train.pca,scale.=TRUE)
+pc.scores<-pc.result$x
+pc.scores<-data.frame(pc.scores)
+pc.scores$y<-trainingsData$y
 
+pc.test <- prcomp(test.pca,scale.=TRUE)
+pc.tests<-pc.test$x
+pc.tests<-data.frame(pc.tests)
+pc.tests$y<-testData$y
+
+# construct the LDA model
+mypcalda <- lda(y~ ., data = pc.scores)
+pred <- predict(mypcalda,newdata = pc.tests)
+
+#capture predictions
+library(ROCR)
+pred.pca.lda <- as.data.frame(pred$posterior)
+pred.pca.lda <- prediction(pred.pca.lda[,2],pc.tests$y)
+
+#Plot the ROC curve
+roc.perf.pca.lda = performance(pred.pca.lda, measure = "tpr", x.measure = "fpr")
+auc.train.pca.lda <- performance(pred.pca.lda, measure = "auc")
+auc.train.pca.lda <- auc.train.pca.lda@y.values
+
+
+plot(roc.perf, colorize = TRUE)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+
+
+# plot
+plot(roc.perf.lda, col= "blue")
+plot(roc.perf.pca.lda, add = TRUE, col="green")
+
+legend("bottomright",legend=c("LDA", "LDA w/ PCA"),
+       col=c("blue", "green"),lty=1,lwd=1)
+abline(a=0, b= 1)
+text(x = .80, y = .65,paste("LDA AUC = ", round(auc.train.lda[[1]],3), sep = ""))
+text(x = .80, y = .55,paste("LDA w/ PCA AUC = ", round(auc.train.pca.lda[[1]],3), sep = ""))
+
+
+```
 
