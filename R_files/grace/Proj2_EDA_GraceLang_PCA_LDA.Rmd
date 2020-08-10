@@ -105,7 +105,7 @@ plot(mylogit_3)
     Do I even need to use the step.model if I already used VIF as a CV?
 ```{r logistic ROC}
 #Make predictions
-pred.log <- as.data.frame(predict(mylogit_3, newdata=testData))
+pred.log <- predict(mylogit_3, newdata=testData)
 
 #capture predictions
 pred.log3 <- prediction(pred.log,testData$y)
@@ -280,42 +280,33 @@ train.lda <- trainingsData[,c(1,11:14,16:21)]
 # construct the LDA model
 mylda <- lda(y~ ., data = train.lda)
 pred <- predict(mylda,newdata = test.lda)
+pred.lda.og <- as.data.frame(pred$posterior)
+pred.lda.og <- prediction(pred.lda.og[,2],pc.tests$y)
+
+
+#Plot the ROC curve
+roc.perf.lda = performance(pred.lda.og, measure = "tpr", x.measure = "fpr")
+auc.train.lda <- performance(pred.lda.og, measure = "auc")
+auc.train.lda <- auc.train.lda@y.values
+plot(roc.perf.lda, colorize = TRUE)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.train.lda[[1]],3), sep = ""))
 
 #capture predictions
 library(ROCR)
 pred.lda <- as.data.frame(pred$posterior)
-pred.lda <- prediction(pred.lda[,2],test.lda$y)
+pred.lda <- pred.lda[,2]
 
-#Plot the ROC curve
-roc.perf.lda = performance(pred.lda, measure = "tpr", x.measure = "fpr")
-auc.train.lda <- performance(pred.lda, measure = "auc")
-auc.train.lda <- auc.train.lda@y.values
-plot(roc.perf.lda, colorize = TRUE)
-abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.train.lda,3), sep = ""))
 
-## Not sure how to create a confusion from a continuous
+#determine the cutoff for the confusion matrix
+predicted.lda <- ifelse(pred.lda < 0.1, "no", "yes") # 0.1= cutoff of confusion matrix
+
 # Create table for confusion Matrix
-predTable.LDA <- tibble(Predicted = pred.lda, Observed = bank.test$y)
+predTable.LDA <- tibble(Predicted = predicted.lda, Observed = testData$y)
 
 #Confusion Matrix
-confusionMatrix(predTable.LDA$Predicted, reference = predTable.LDA$Observed)
+confusionMatrix(as.factor(predTable.LDA$Predicted), reference = predTable.LDA$Observed)
 
-#Add in a confusion matrix?
-predTable <- tibble(Predicted = as.data.frame(pred.lda), Observed = bank.test$y)
-
-#Confusion Matrix
-confusionMatrix(predTable$Predicted, reference = predTable$Observed)
-
-
-#Saving in case i have to use later 
-#creating new binary response
-#test.lda$response <- if(test.lda$y=="yes"){1}else{0}
-#test.lda[test.lda$y == "yes" ,"response"] <- 1 
-#test.lda <- subset(test.lda[,c(1:10,12)])
-#train.lda$response <- if(train.lda$y=="yes"){1}else{0}
-#train.lda[train.lda$y == "yes" ,"response"] <- 1 
-#train.lda <- subset(train.lda[,c(1:10,12)])
 ```
 # LDA w/ PCA variables
 Running an LDA on the PCA variables
@@ -344,10 +335,6 @@ roc.perf.pca.lda = performance(pred.pca.lda, measure = "tpr", x.measure = "fpr")
 auc.train.pca.lda <- performance(pred.pca.lda, measure = "auc")
 auc.train.pca.lda <- auc.train.pca.lda@y.values
 
-
-plot(roc.perf, colorize = TRUE)
-abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 
 
 

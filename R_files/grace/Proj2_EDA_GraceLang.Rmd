@@ -41,6 +41,7 @@ library(caret)
 library(reshape2)
 library(matlab)
 library(MASS)
+library(stats)
 
 #Grace's connection
 bank <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
@@ -97,6 +98,9 @@ ggplot(g, aes(x=Var1, y=Freq, fill=Var2)) + geom_bar(stat = "identity")
 sort(unique(bank$previous))
 as.data.frame(table(bank$previous))
 
+sort(unique(bank$cons.price.idx))
+sort(unique(bank$nr.employed))
+sort(unique(bank$cons.conf.idx))
 
 sort(unique(bank$poutcome))
 as.data.frame(table(bank$poutcome,bank$y))
@@ -295,7 +299,7 @@ table(bank.train$y)
 table(bank.test$y)
 table(bank$y)
 
-prop.table(table(y,job),2)
+#prop.table(table(y,job),2)
 
 #Downsampling... Is it even needed anymore?
 #Train <- downSample(bank,bank$y)
@@ -308,7 +312,10 @@ prop.table(table(y,job),2)
 ```
 
 # EDA - Do we want to include PCA here?
-Probably not from my first pass
+Probably not from my first pass - can PCAs take categorical vs continuous?
+
+Dummy code categorical into continuous ... then you can use PCA. -- project 2 description
+categorical- ordinal can prove to work within the dummy PCA 
 ```{r PCA}
 pc.result<-prcomp(bank[,c(1,11)],scale.=TRUE)
 pc.scores<-pc.result$x
@@ -319,22 +326,30 @@ pc.scores$y<-bank$y
 ggplot(data = pc.scores, aes(x = PC1, y = PC2)) +
   geom_point(aes(col=y), size=1)+
   ggtitle("PCA of Age & Duration - Bank Data")
+
+ggplot(data = bank, aes(x = age, y = duration)) +
+  geom_point(aes(col=y), size=1)+
+  ggtitle("Age & Duration - Bank Data")
+
 ```
 
-```{r VIF}
+```{r correlation}
+my.cor<-cor(bank[,2:20])
 
-
+heatmap.2(my.cor,col=redgreen(75), 
+          density.info="none", trace="none", dendrogram=c("row"), 
+          symm=F,symkey=T,symbreaks=T, scale="none")
 ```
-
 
 # First attempt at fitting the model and seeing the confusion matrix
 ```{r model step}
 #this isn't running because it times out - why? am i including too many variables?
 # Full Model
-bank.log <- glm(y~., data = bank.train, family = "binomial")
+attach(bank.train)
+bank.log <- glm(y~. , family = "binomial", data = bank)
 
 
-# Step  Model
+ # Step  Model
 step.model <- bank.log %>% stepAIC(trace = FALSE)
 summary(step.model) 
 
@@ -349,5 +364,15 @@ summary(predict_1)
 # Confusion Matrix
 predTable <- tibble(Predicted = as.factor(predict_2), Observed = bank.test$y)
 confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+```
+
+# Why is VIF squared in logit?
+```{r VIF}
+#Using this tool, GVIF is the same as VIF for continuous predictors only
+#For categorical predictors, the value GVIG^(1/(2*df)) should be squared and interpreted
+#as a usuaul vif type metric.The following code can be used to interpret VIFs like we 
+#discussed in class.
+(vif(bank.log)[,3])^2
+
 ```
 
