@@ -147,7 +147,7 @@ pairs(clean_bank[int_bank_fields],col=cols)
 ```{r}
 
 cor(subset(clean_bank, select=int_bank_fields)) -> df_cortest 
-#melt(df_cortest) %>% ggplot(aes(x=Var1, y = Var2, fill = value)) + geom_tile(color = "white")+scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") + theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))+coord_fixed()
+melt(df_cortest) %>% ggplot(aes(x=Var1, y = Var2, fill = value)) + geom_tile(color = "white")+scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") + theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))+coord_fixed()
 
 
 #cor(subset(clean_bank, select=-int_bank_fields)) -> df_cortest 
@@ -236,8 +236,6 @@ matrx_contact
 
 
 ```{r}
-#xtabs instead
-
 library(epitools)
 #Another way to format a count matrix
 mymat2<-matrix(matrx_contact,2,2,byrow=T)
@@ -249,97 +247,3 @@ oddsratio.wald(mymat2)
 #Relative Risk Intervals
 riskratio.wald(mymat2)
 ```  
-
-
-
-
-
-
-```{r}
-library(glmnet)
-library(ROCR)
-library(MASS)
-library(ggplot2)
-library(pheatmap)
-library(randomForest)
-
-library(RColorBrewer)
-
-library(viridis)
-
-dat.train <- clean_bank[1:5,]
-dat.train.x <- dat.train[,int_bank_fields[1:9]]
-dat.train.y <- dat.train$y
-
-dat.train.y <- as.factor(as.character(dat.train.y))
-
-
-cols <- colorRampPalette(brewer.pal(length(dat.train.x), "Set1"))
-x<-t(dat.train.x)
-colnames(x)<-dat.train.y
-summary(dat.train.x)
-colorlist <- list(y=c("no"="white","yes"="green"))
-colanno <-data.frame(y=dat.train.y)
-pal <- colorRampPalette(c("blue","white", "red"), space = "rgb")(100)
-pheatmap(x,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal)
-
-```
-
-#A good exercise would be to go in and play around with the 
-#data but maybe add a few "fake" predictors that seperate out
-#the two response categories very well.  From there make the plots 
-#again and see how they reflect that truth.
-
-#The heatmap could be done using the PC's as well.
-
-
-
- 
-  
-```{r}
-#glmnet requires a matrix 
-dat.train.x <- as.matrix(dat.train.x)
-library(glmnet)
-cvfit <- cv.glmnet(dat.train.x, dat.train.y, family = "binomial", type.measure = "class", nlambda = 1000)
-plot(cvfit)
-coef(cvfit, s = "lambda.min")
-
-#Get training set predictions...We know they are biased but lets create ROC's.
-#These are predicted probabilities from logistic model  exp(b)/(1+exp(b))
-fit.pred <- predict(cvfit, newx = dat.train.x, type = "response")
-
-#Compare the prediction to the real outcome
-head(fit.pred)
-head(dat.train.y)
-```
-
-
-```{r}
-#mylda$terms
-#Create ROC curves
-
-#pred <- prediction(mylda[,1], clean_bank)
-roc.perf = performance(fit.pred, measure = "tpr", x.measure = "fpr")
-auc.train <- performance(fit.pred, measure = "auc")
-auc.train <- auc.train@y.values
-
-#Plot ROC
-plot(roc.perf)
-abline(a=0, b= 1) #Ref line indicating poor performance
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-
-
-```
-
-
-
-
-
-```{r}
-library(RColorBrewer)
-cols <- colorRampPalette(brewer.pal(9, "Set1"))
-x<-t(dat.train.x)
-colnames(x)<-dat.train.y
-pheatmap(x,annotation_col=data.frame(Cancer=dat.train.y),annotation_colors=list(Cancer=c("0"="white","1"="green")),scale="row",legend=T,color=colorRampPalette(c("blue","white", "red"), space = "rgb")(100))
-
-```
