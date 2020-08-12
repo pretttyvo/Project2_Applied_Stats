@@ -1,0 +1,771 @@
+---
+title: "Final Stats 2 Project Output"
+author: "Grace Lang, Julia Layne & Jamie Vo"
+date: "7/12/2020"
+output: html_document
+---
+
+# Introduction
+
+The data relates to a phone call marketing campaign directed by a banking institution to predict whether or not a client will participate in a term deposit. Term deposits are considered to be a more secure investment opportunity, considered to be somewhat protected from market fluctuations, as opposed to stocks. Generally, a client will invest a specific sum for a set amount of time (e.g. 5 months) with a predetermined interest rate. The investment is then pulled after the time has passed or prior, typically with a cost penalty. 
+
+The dataset contains all contact attempts to the clients, which can be multiple times to determine whether or not the client will subscribe to a term deposit (campaign). In total, there are 41,188 total observations. For social and economic context attributes, keep in mind that the indicators are assumed to be pulled from the general demographic, and is hence normalizing the data.
+
+```{r, results="hide", echo=FALSE}
+# read in libraries
+
+library(naniar)
+library(ggplot2)
+library(dplyr)
+library(groupdata2)
+library(MASS)
+library(tidyverse)
+library(ROCR)
+library(glmnet)
+library(aod)
+library(caret)
+
+```
+
+# MARKETING CAMPAIGNS
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DATASET 
+https://archive.ics.uci.edu/ml/datasets/bank%20marketing
+
+### Variables
+
+Input variables:
+
+#### bank client data:
+
+1 - age (numeric)
+2 - job : type of job (categorical: 'admin.','blue-collar','entrepreneur','housemaid','management','retired','self-employed','services','student','technician','unemployed','unknown')
+3 - marital : marital status (categorical: 'divorced','married','single','unknown'; note: 'divorced' means divorced or widowed)
+4 - education (categorical: 'basic.4y','basic.6y','basic.9y','high.school','illiterate','professional.course','university.degree','unknown')
+5 - default: has credit in default? (categorical: 'no','yes','unknown')
+6 - housing: has housing loan? (categorical: 'no','yes','unknown')
+7 - loan: has personal loan? (categorical: 'no','yes','unknown')
+
+#### related with the last contact of the current campaign:
+
+8 - contact: contact communication type (categorical: 'cellular','telephone')
+9 - month: last contact month of year (categorical: 'jan', 'feb', 'mar', ..., 'nov', 'dec')
+10 - day_of_week: last contact day of the week (categorical: 'mon','tue','wed','thu','fri')
+11 - duration: last contact duration, in seconds (numeric). Important note: this attribute highly affects the output target (e.g., if duration=0 then y='no'). Yet, the duration is not known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input should only be included for benchmark purposes and should be discarded if the intention is to have a realistic predictive model.
+
+#### other attributes:
+
+12 - campaign: number of contacts performed during this campaign and for this client (numeric, includes last contact)
+13 - pdays: number of days that passed by after the client was last contacted from a previous campaign (numeric; 999 means client was not previously contacted)
+14 - previous: number of contacts performed before this campaign and for this client (numeric)
+15 - poutcome: outcome of the previous marketing campaign (categorical: 'failure','nonexistent','success')
+
+#### social and economic context attributes
+16 - emp.var.rate: employment variation rate - quarterly indicator (numeric)
+17 - cons.price.idx: consumer price index - monthly indicator (numeric)
+18 - cons.conf.idx: consumer confidence index - monthly indicator (numeric)
+19 - euribor3m: euribor 3 month rate - daily indicator (numeric)
+20 - nr.employed: number of employees - quarterly indicator (numeric)
+
+#### Output variable (desired target):
+21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
+
+## EDA
+
+### Cleaning data, new variable generation, and/or handling missing logistics
+
+##### Cleaning Data
+ $ age           : int
+ $ job           : Factor 
+ $ marital       : Factor 
+ $ education     : Factor 
+ $ default       : Factor 
+ $ housing       : Factor 
+ $ loan          : Factor 
+ $ contact       : Factor 
+ $ month         : Factor 
+ $ day_of_week   : Factor 
+ $ duration      : int
+ $ campaign      : int
+ $ pdays         : int
+ $ previous      : int
+ $ poutcome      : Factor 
+ $ emp.var.rate  : Factor 
+ $ cons.price.idx: Factor 
+ $ cons.conf.idx : Factor 
+ $ euribor3m     : Factor 
+ $ nr.employed   : Factor 
+ $ y             : Factor 
+```{r, results="hide", echo=FALSE}
+# read in the data
+#df <- read.csv2('../../Data/bank-additional-full.csv')
+df <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
+
+# get summary statistics
+summary(df)
+nrow(df)
+# types of each category
+str(df)
+```
+
+### Converting columns to correct types
+Convert required data from vector to int
+```{r, results="hide", echo=FALSE}
+# converting factors to numeric
+cols.vector <- c("emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
+length(cols.vector)
+
+# loop through the columns in the list and convert to numeric
+for (col.name in cols.vector){
+  df[col.name] <- sapply(df[col.name], as.numeric )
+}
+
+```
+##### EDA - Determining significant columns
+
+1. Pdays - a significant number of the observations do not have prior contacts, hence they do not have days after the first contacts filed (pdays not equal to 999). 3.68% of the observations (1,151 records) have had more than one contact. This appears to be an insignificant column.
+
+2. Previous - while ~14% of the clients were contacted prior to the current campaign, 11% were contacted only 1 prior, leaving only 3% that were contacted more than once, prior.  
+
+3. Campaigns - potentially significant
+
+4. Duration - This should be removed considering that the dataset states: for a realistic predictive model, this factor should not be considered.
+
+```{r, results="hide", echo=FALSE}
+# check pdays that is not 999
+df %>% filter(pdays != 999)
+
+# check for previous not equal to 0
+df %>% filter(previous != 0)
+df %>% filter(previous == 1)
+df.prev.great <- df %>% filter(previous != 0 & previous != 1)
+summary(df.prev.great)
+
+# check for campaigns that are greater than 1
+df.prior <- df %>% filter(campaign != 1)
+summary(df.prior)
+
+```
+
+#####New Variable Generation
+```{r, echo=FALSE}
+# convert 999 in pdays to 0
+df$pdays_0 <- df$pdays
+df$pdays_0[df$pdays_0 == 999] <- 0
+
+```
+
+##### Handling of Missing Logistics
+There are no missing values -> this is due to the fact that missing values are designated as unknown.
+
+Columns with missing data
+- Job 330 (type of job)
+- Marital 80
+- Eduation 1731 (highest education received)
+- Default 8597 (whether or not they have credit in default - failure to pay)
+- Housing 990 (has a housing loan or not)
+- Loan 990 (personal loan or not)
+
+Total number of observations: 41,188
+Total number of observations with at least one missing value: 10,700
+
+~26% of the observations have at least one missing data record. 
+
+The summary statistics do not initally appear to have a significant skew from the full data. A concern with the data is that all columns with missing data points are categorical. Majority of the rows only have one missing, with less than 20% having more than one missing portion of the record.
+
+Options:
+Ignore observations - not ideal
+Ignore variable - TBD in analysis
+Develop model to predict missing values 
+Treat missing data as just another category - Recommended
+
+
+```{r, results="hide", echo=FALSE}
+# check for missing values
+df.test <- df # create new df to modify
+sapply(df.test, function(x) sum(is.na(x)))
+
+# replace unknown with N/A for better analysis, then check again for n/a
+df.test[ df.test == "unknown" ] <- NA
+
+# get rows with n/a
+df.missing <- df.test %>% filter(is.na(job)| is.na(marital)| is.na(education)| is.na(default)| is.na(housing)| is.na(loan))
+df.missing$na_count <- apply(df.missing, 1, function(x) sum(is.na(x))) # create column of counts of na per row
+df.missing %>% filter(df.missing$na_count != 1) #check rows with more than 1 na
+summary(df.missing)
+
+# review each column of missing data
+df.missing.1 <- df %>% filter(is.na(job))
+summary(df.missing.1)
+
+```
+
+##### Plotting for trend determination
+FULL DATASET: Visual for numeric, color categorized by whether or not the client participated in term deposit.
+```{r, echo=FALSE}
+# get all numeric columns into a subset
+  # original data
+    df.int <- df[,sapply(df,is.integer)|sapply(df,is.numeric)]
+    df.int$y <- df$y
+  # missing data
+    df.missing.int <- df.missing[,sapply(df.missing,is.integer)|sapply(df.missing,is.numeric)]
+    df.missing.int$y <- df.missing$y
+# create matrix plot to determine trends, if any
+  # original data
+    my_cols <- c("#00AFBB", "#E7B800") 
+   # p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
+```
+MISSING DATA: Visual for numeric, color categorized by whether or not the client participated in term deposit.
+```{r, echo=FALSE}
+  # missing data
+   # p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
+
+
+```
+
+Visual for categorical, color categorized by whether or not the client participated in term deposit.
+
+```{r, echo=FALSE}
+# get all columns that are vectors
+df.vector <- df[,sapply(df,is.factor)]
+df.missing.vector <- df.missing[,sapply(df.missing,is.factor)]
+
+t <- df.vector %>% group_by(marital, housing, contact, y) %>% count(marital, housing, contact, y)
+
+# graph vectors to determine trends
+ggplot(t, aes(x = housing, y=n))+
+  geom_bar(
+    aes(fill = marital), stat = "identity",
+    position = position_dodge(0.9)
+    )+
+  facet_wrap(~contact)+
+  ggtitle("Marital Stats vs. Housing vs. Contact")
+```
+
+2.  There are way more No's than Yes for the response variable.  Consider sampling your training data set in such a way that the Yes and No's are more equally balanced.   (This technique is referred to as downsampling.  There is also upsampling.)  After your groups meet and discuss, you can meet with me for a deeper discussion on this issue.
+```{r, echo=FALSE}
+
+### Split the data into train/test
+#-----------------------------------------------------------------------#
+
+set.seed(1234)
+colnames(df)
+# set index
+df$ID <- seq.int(nrow(df))
+
+trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
+trainingData <- df[trainingRowIndex, ]  # model training data
+summary(trainingData)
+summary(testData)
+trainingsData <- downsample(trainingData, cat_col ='y')
+testData  <- df[-trainingsData$ID, ]   # test data
+
+```
+
+```{r}
+### Test feature selection on the training dataset
+#-----------------------------------------------------------------------#
+# drop insignificant columns
+colnames(df)
+
+trainingsData2 <- trainingsData[ , -which(names(trainingsData) %in% c("pdays","ID"))]
+summary(trainingsData2)
+# 1. Creating contigency tables for visual analysis
+xtabs(~housing + y, data = df)
+
+
+# 2. Testing feature selection
+
+# raw logit - AIC: 1554.9
+mylogit <- glm(y ~ ., data = trainingsData2, family = "binomial") # family indicates that it is a logit 
+summary(mylogit)
+
+# final logit original - AIC: 2559.1
+logit.og <- glm(y ~ job + education + contact + month + 
+                  day_of_week + campaign + poutcome + 
+                  cons.price.idx  + nr.employed, 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(logit.og)
+#confint(mylogit)
+```
+STEPWISE
+```{r}
+# -- Run a STEPWISE method
+# Stepwise regression model - AIC: 1525.3
+#step.log<-mylogit %>% stepAIC(trace=FALSE)
+
+step.log<-mylogit %>% stepAIC(trace=FALSE)
+step.model <- stepAIC(mylogit, direction = "both", 
+                      trace = FALSE)
+# final stepwise model - AIC: 1525.3
+logit.step <- glm(y ~ education + month + poutcome + 
+                  emp.var.rate  + duration + cons.price.idx  + nr.employed, 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(step.log)
+```
+FORWARD
+```{r}
+# Forward regression model
+forward.model <- stepAIC(mylogit, direction = "forward", 
+                      trace = FALSE)
+
+# final forward regression - AIC: 1530.3
+logit.forward <- glm(y ~ age + job + month + 
+                  duration + cons.price.idx  + 
+                  nr.employed + poutcome, 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(logit.forward)
+
+```
+BACKWARDS
+```{r}
+# Backward regression model
+backward.model <- stepAIC(mylogit, direction = "backward", 
+                      trace = FALSE)
+# final backward regression - AIC: 2555.9
+logit.backward <- glm(y ~ education + month + 
+                        poutcome + emp.var.rate + 
+                        cons.price.idx + nr.employed, 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(logit.backward)
+```
+LASSO
+
+```{r}
+
+dat.train.x <- model.matrix(y~.,trainingsData2)
+dat.train.y<-trainingsData2[,20]
+cvfit <- cv.glmnet(dat.train.x, dat.train.y, family = "binomial", type.measure = "class", nlambda = 1000)
+plot(cvfit)
+coef(cvfit, s = "lambda.min")
+#CV misclassification error rate is little below .1
+print("CV Error Rate:")
+cvfit$cvm[which(cvfit$lambda==cvfit$lambda.min)]
+
+#Optimal penalty
+print("Penalty Value:")
+cvfit$lambda.min
+
+#For final model predictions go ahead and refit lasso using entire
+#data set
+
+logit.lasso<-glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
+colnames(trainingsData2)
+coef(logit.lasso)
+
+logit.test <- glm(y ~ #job 
+                  #+ marital 
+                  #+ housing 
+                   education 
+                  #+ default 
+                  #+ contact 
+                  + month
+                  #+ day_of_week 
+                  + duration 
+                  #+ campaign 
+                  + poutcome 
+                  + emp.var.rate 
+                  + cons.conf.idx 
+                  + cons.price.idx 
+                  + nr.employed 
+                  , 
+                data = trainingsData2, family = "binomial") # final logit model - no fitting
+summary(logit.test)
+```
+CUSTOM 
+```{r}
+#   NEW VARIABLE CREATION
+# create new columns to replace old columns
+df.newvar <- df
+#colnames(df.newvar)
+
+
+#Creating an Age Bucket
+df.newvar$agebucket <- with(df.newvar, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
+,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","Less than 20"))))))))
+
+df.newvar$education_0 <- df.newvar$education
+df.newvar$education_0[df.newvar$education_0 != "university.degree"] <- "unknown"
+df.newvar$job_0 <- df.newvar$job
+df.newvar$job_0[df.newvar$job_0 != "blue-collar"] <- "unknown"
+months <- list("aug", "may", "nov")
+df.newvar$month_0 <- "1"
+`%notin%` <- Negate(`%in%`)
+df.newvar$month_0[df.newvar$month %notin% months] <- "0"
+```
+DATAFRAME
+```{r}
+
+cm.df.custom <- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
+                    , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
+counter = 1
+
+```
+
+MODEL
+```{r}
+
+trainingRowIndex <- sample(1:nrow(df.newvar), 0.25*nrow(df.newvar))  # row indices for training data
+trainingData <- df.newvar[trainingRowIndex, ]
+testData  <- df.newvar[-trainingsData$ID, ]
+train.data <- df.newvar[trainingRowIndex, ]
+test.data  <- df.newvar[-trainingsData$ID, ]
+#train.data <- trainingData[ , -which(names(trainingData) %in% c("pdays","ID", "education", "job", "month"))]
+#test.data <- testData[ , -which(names(testData) %in% c("pdays","ID", "education", "job", "month"))]
+
+mylog <- glm(y ~ education + month + poutcome + 
+                  emp.var.rate + cons.price.idx  + nr.employed + emp.var.rate*cons.price.idx +
+                  cons.price.idx*nr.employed
+             , data = trainingsData2, family = "binomial") # family indicates that it is a logit 
+steps <- stepAIC(mylog, direction = "both", 
+                      trace = FALSE)
+# final stepwise model - AIC: 1525.3
+#summary(steps)
+
+pred.custom <- predict(steps, testData2)
+
+cutoff = 0.6
+
+predicted.custom.classes <- ifelse(pred.custom < cutoff, "no", "yes")
+
+# Create table for conjfusion Matrix
+predTable.custome <- tibble(Predicted = as.factor(predicted.custom.classes), Observed = testData2$y)
+
+#Confusion Matrix
+cm.custom <- confusionMatrix(predTable.custome$Predicted, reference = predTable.custome$Observed)
+#cm.custom
+
+# fill in df
+
+  cm.df.custom[counter,1] <- 'evr*cpi + cpi*em'
+  cm.df.custom[counter,2] <- cm.custom$overall[1] # accuracy
+  cm.df.custom[counter,3] <- cm.custom$byClass[1] # sensitivity
+  cm.df.custom[counter,4] <- cm.custom$byClass[2] # specificity
+  cm.df.custom[counter,5] <- mean(c(cm.df.custom[count,2], cm.df.custom[count,3], cm.df.custom[count,4]))
+  cm.df.custom[counter,6] <- cutoff # cutoff value
+  counter = counter + 1
+
+
+attach(cm.df.custom)
+ordered.cm.df.custom <- cm.df.custom[order(Cutoff),]
+detach(cm.df.custom)
+ordered.cm.df.custom
+```
+
+ROC CURVES
+```{r}
+# 3. ROC Curves
+
+testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
+
+# predict
+fit.pred.og <- as.data.frame(predict(logit.og, testData2, type="response"))
+fit.pred.step <- as.data.frame(predict(step.model, testData2, type="response"))
+fit.pred.forward <- as.data.frame(predict(logit.forward, testData2, type="response"))
+fit.pred.backward <- as.data.frame(predict(logit.backward, testData2, type="response"))
+
+dat.test.x<-model.matrix(y~.,testData2)
+fit.pred.lasso <- predict(logit.lasso, newx = dat.test.x, type = "response")
+
+# predictions
+results.og<-prediction(fit.pred.og, testData2$y,label.ordering=c("no","yes"))
+results.step<-prediction(fit.pred.step, testData2$y,label.ordering=c("no","yes"))
+results.forward<-prediction(fit.pred.forward, testData2$y,label.ordering=c("no","yes"))
+results.backward<-prediction(fit.pred.backward, testData2$y,label.ordering=c("no","yes"))
+results.lasso<-prediction(fit.pred.lasso, testData2$y,label.ordering=c("no","yes"))
+
+#performance
+roc.og = performance(results.og, measure = "tpr", x.measure = "fpr")
+roc.step = performance(results.step, measure = "tpr", x.measure = "fpr")
+roc.forward = performance(results.forward, measure = "tpr", x.measure = "fpr")
+roc.backward = performance(results.backward, measure = "tpr", x.measure = "fpr")
+roc.lasso = performance(results.lasso, measure = "tpr", x.measure = "fpr")
+
+# get AUC
+auc_ROCR <- performance(results.og, measure = "auc")@y.values[[1]]
+auc_ROCR.step <- performance(results.step, measure = "auc")@y.values[[1]]
+auc_ROCR.forward <- performance(results.forward, measure = "auc")@y.values[[1]]
+auc_ROCR.backward <- performance(results.backward, measure = "auc")@y.values[[1]]
+auc_ROCR.lasso <- performance(results.lasso, measure = "auc")@y.values[[1]]
+
+# plot
+plot(roc.og)
+plot(roc.step,add = TRUE, col = "orange")
+plot(roc.forward, add = TRUE, col= "blue")
+plot(roc.backward, add = TRUE, col="red")
+plot(roc.lasso,add = TRUE, col="yellow")
+legend("bottomright",legend=c("Original","Stepwise","Forward", "Backward", "Lasso"),
+       col=c("black","orange","blue", "red", "yellow"),lty=1,lwd=1)
+abline(a=0, b= 1)
+text(x = .80, y = .85,paste("Original AUC = ", round(auc_ROCR,3), sep = ""))
+text(x = .80, y = .75,paste("Step AUC = ", round(auc_ROCR.step,3), sep = ""))
+text(x = .80, y = .65,paste("Forward AUC = ", round(auc_ROCR.forward,3), sep = ""))
+text(x = .80, y = .55,paste("Backward AUC = ", round(auc_ROCR.backward,3), sep = ""))
+text(x = .80, y = .45,paste("Lasso AUC = ", round(auc_ROCR.lasso,3), sep = ""))
+
+```
+According to the AUC of the ROC curves, Lasso appears to have an upper hand.
+
+##### Comparing AIC and AUC
+```{r}
+models <- c("original", "stepwise", "forward", "backwarc", "lasso")
+AICs <- c(2559.1, 1525.3, 1530.3, 2555.9, 1542.8)
+AUCs <- c(round(auc_ROCR,3),round(auc_ROCR.step,3),round(auc_ROCR.forward,3),round(auc_ROCR.backward,3),round(auc_ROCR.lasso,3))
+
+data <- list(model = models, AIC = AICs, AUC = AUCs)
+
+model.stats <- as.data.frame(data)
+
+
+```
+According to the AUC, stepwise, forward, and Lasso have the highest area under the curve. 
+
+While the AIC of the three models are relatively close, stepwise is the lowest of the 5 models tested. 
+
+##### Ratio Statistics
+```{r}
+
+# 4. odds ratios only
+exp(coef(logit.step))
+
+# 5. odds ratios and 95% CI
+exp(cbind(OR = coef(logit.step), confint(logit.step)))
+
+```
+Cut off selection
+```{r}
+# create df to hold metrics
+alg <- list('Original', 'Step', 'Forward', 'Backward', 'Lasso')
+
+cm.df <- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
+                    , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
+count = 1
+```
+
+```{r}
+
+pred.og <- predict(logit.og, testData2)
+pred.step <- predict(step.model, testData2)
+pred.forward <- predict(logit.forward, testData2)
+pred.backward <- predict(logit.backward, testData2)
+pred.lasso <- predict(logit.lasso, newx = dat.test.x)
+
+cutoff = 0.45
+
+predicted.og.classes <- ifelse(pred.og < cutoff, "no", "yes")
+predicted.step.classes <- ifelse(pred.step < cutoff, "no", "yes")
+predicted.forward.classes <- ifelse(pred.forward < cutoff, "no", "yes")
+predicted.backward.classes <- ifelse(pred.backward < cutoff, "no", "yes")
+predicted.lasso.classes <- ifelse(pred.lasso < cutoff, "no", "yes")
+
+# Create table for conjfusion Matrix
+predTable.og <- tibble(Predicted = as.factor(predicted.og.classes), Observed = testData2$y)
+predTable.step <- tibble(Predicted = as.factor(predicted.step.classes), Observed = testData2$y)
+predTable.forward <- tibble(Predicted = as.factor(predicted.forward.classes), Observed = testData2$y)
+predTable.backward <- tibble(Predicted = as.factor(predicted.backward.classes), Observed = testData2$y)
+predTable.lasso <- tibble(Predicted = as.factor(predicted.lasso.classes), Observed = testData2$y)
+
+#Confusion Matrix
+cm.og <- confusionMatrix(predTable.og$Predicted, reference = predTable.og$Observed)
+cm.step <- confusionMatrix(predTable.step$Predicted, reference = predTable.step$Observed)
+cm.forward <- confusionMatrix(predTable.forward$Predicted, reference = predTable.forward$Observed)
+cm.backward <- confusionMatrix(predTable.backward$Predicted, reference = predTable.backward$Observed)
+cm.lasso <- confusionMatrix(predTable.lasso$Predicted, reference = predTable.lasso$Observed)
+
+
+# populate the df
+
+cm <- list(cm.og, cm.step, cm.forward, cm.backward, cm.lasso)
+
+ for(i in 1:length(cm)){
+  cm.df[count,1] <- alg[[i]]
+  cm.df[count,2] <- cm[[i]]$overall[1] # accuracy
+  cm.df[count,3] <- cm[[i]]$byClass[1] # sensitivity
+  cm.df[count,4] <- cm[[i]]$byClass[2] # specificity
+  cm.df[count,5] <- mean(c(cm.df[count,2], cm.df[count,3], cm.df[count,4]))
+  cm.df[count,6] <- cutoff # cutoff value
+  count = count + 1
+ }
+step.cm <- cm.df %>% filter(Model == 'Step')
+attach(step.cm)
+ordered.step.cm <- step.cm[order(Cutoff),]
+detach(step.cm)
+ordered.step.cm
+
+print(cm.df%>% filter(Cutoff == 0.4))
+```
+****************************************
+  ## CUSTOM COMPLEX MODEL
+****************************************
+```{r}
+custom.log <- glm(y~nr.employed + cons.price.idx + duration + campaign  + contact  + education  + age+ poutcome +duration*contact + duration*job , family = "binomial", data = trainingsData2)
+
+(vif(custom.log)[,3])^2
+#plot(custom.log) #No evident influencers from Cook's D
+#added and removed variations of interactions in order to see if they had multicollinearity
+
+#Make predictions
+pred.log <- predict(custom.log, newdata=testData)
+
+#capture predictions
+pred.log3 <- prediction(pred.log,testData$y)
+
+#Plot the ROC curve to determine cutoff
+roc.log.perf = performance(pred.log3, measure = "tpr", x.measure = "fpr")
+roc.train <- performance(pred.log3, measure = "auc")
+roc.train <- roc.train@y.values
+
+plot(roc.log.perf, col = "red")
+legend("bottomright",legend=c("Custom Complex Log"),
+       col=c("red"),lty=1,lwd=1)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(roc.train[[1]],3), sep = ""))
+
+#determine the cutoff for the confusion matrix
+predicted.classes <- ifelse(pred.log < 0.1, "no", "yes") # 0.1= cutoff of confusion matrix
+
+# Model accuracy
+mean(predicted.classes==testData$y)
+summary(pred.log)
+
+# Create table for conjfusion Matrix
+predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = testData$y)
+
+#Confusion Matrix
+confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+```
+
+
+****************************************
+  ## PCA
+****************************************
+# Setting up test/training for just the continuous variables to look at PCA
+```{r}
+test.pca <- testData[,c(1,11:14,16:20)]
+train.pca <- trainingsData[,c(1,11:14,16:20)]
+```
+
+# EDA - Do we want to include PCA here?
+OH? - PCA2 vs PCA4 has a clear seperation, but the ones before don't seem to have such a clear seperation. Is there some interpretation i'm missing here?
+
+```{r PCA}
+pc.result<-prcomp(train.pca,scale.=TRUE)
+pc.scores<-pc.result$x
+pc.scores<-data.frame(pc.scores)
+pc.scores$y<-trainingsData$y
+
+#Plotting out some PCAs to see if there is any seperation
+#There is not a clear seperation between these the PCA continuous variables.
+ggplot(data = pc.scores, aes(x = PC1, y = PC2)) +
+  geom_point(aes(col=y), size=0.5)+
+  ggtitle("PCA of PC1 vs PC2")
+
+ggplot(data = pc.scores, aes(x = PC1, y = PC3)) +
+  geom_point(aes(col=y), size=1)+
+  ggtitle("PCA of Bank Data")
+
+ggplot(data = pc.scores, aes(x = PC2, y = PC3)) +
+  geom_point(aes(col=y), size=1)+
+  ggtitle("PCA of Bank Data")
+
+#This one shows promise
+ggplot(data = pc.scores, aes(x = PC2, y = PC4)) +
+  geom_point(aes(col=y), size=0.5)+
+  ggtitle("PCA of PC4 vs PC2")
+
+ggplot(data = pc.scores, aes(x = PC4, y = PC5)) +
+  geom_point(aes(col=y), size=0.5)+
+  ggtitle("PCA of Bank Data")
+
+ggplot(data = bank, aes(x = age, y = duration)) +
+  geom_point(aes(col=y), size=1)+
+  ggtitle("Age & Duration - Bank Data")
+
+#make points finer
+```
+
+****************************************
+  ## LDA
+****************************************
+# LDA
+Create another competing model using just the continuous predictors and use LDA or QDA
+```{r}
+#create data for LDA model
+test.lda <- testData[,c(1,11:14,16:21)]
+train.lda <- trainingsData[,c(1,11:14,16:21)]
+
+# construct the LDA model
+mylda <- lda(y~ ., data = train.lda)
+pred <- predict(mylda,newdata = test.lda)
+pred.lda.og <- as.data.frame(pred$posterior)
+pred.lda.og <- prediction(pred.lda.og[,2],test.lda$y)
+
+
+#Plot the ROC curve
+roc.perf.lda = performance(pred.lda.og, measure = "tpr", x.measure = "fpr")
+auc.train.lda <- performance(pred.lda.og, measure = "auc")
+auc.train.lda <- auc.train.lda@y.values
+plot(roc.perf.lda, colorize = TRUE)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.train.lda[[1]],3), sep = ""))
+
+#capture predictions
+pred.lda <- as.data.frame(pred$posterior)
+pred.lda <- pred.lda[,2]
+
+
+#determine the cutoff for the confusion matrix
+predicted.lda <- ifelse(pred.lda < 0.1, "no", "yes") # 0.1= cutoff of confusion matrix
+
+# Create table for confusion Matrix
+predTable.LDA <- tibble(Predicted = predicted.lda, Observed = testData$y)
+
+#Confusion Matrix
+confusionMatrix(as.factor(predTable.LDA$Predicted), reference = predTable.LDA$Observed)
+
+```
+
+# LDA w/ PCA variables
+Running an LDA on the PCA variables
+```{r pca on lda}
+pc.result<-prcomp(train.pca,scale.=TRUE)
+pc.scores<-pc.result$x
+pc.scores<-data.frame(pc.scores)
+pc.scores$y<-trainingsData2$y
+
+pc.test <- prcomp(test.pca,scale.=TRUE)
+pc.tests<-pc.test$x
+pc.tests<-data.frame(pc.tests)
+pc.tests$y<-test.data$y
+
+# construct the LDA model
+mypcalda <- lda(y~ ., data = pc.scores)
+pred <- predict(mypcalda,newdata = pc.tests)
+
+#capture predictions
+pred.pca.lda <- as.data.frame(pred$posterior)
+pred.pca.lda <- prediction(pred.pca.lda[,2],pc.tests$y)
+
+#Plot the ROC curve
+roc.perf.pca.lda = performance(pred.pca.lda, measure = "tpr", x.measure = "fpr")
+auc.train.pca.lda <- performance(pred.pca.lda, measure = "auc")
+auc.train.pca.lda <- auc.train.pca.lda@y.values
+
+
+
+
+# plot
+plot(roc.perf.lda, col= "blue")
+plot(roc.perf.pca.lda, add = TRUE, col="green")
+
+legend("bottomright",legend=c("LDA", "LDA w/ PCA"),
+       col=c("blue", "green"),lty=1,lwd=1)
+abline(a=0, b= 1)
+text(x = .80, y = .65,paste("LDA AUC = ", round(auc.train.lda[[1]],3), sep = ""))
+text(x = .80, y = .55,paste("LDA w/ PCA AUC = ", round(auc.train.pca.lda[[1]],3), sep = ""))
+
+
+```
