@@ -601,7 +601,8 @@ print(cm.df%>% filter(Cutoff == 0.4))
   ## CUSTOM COMPLEX MODEL
 ****************************************
 ```{r}
-custom.log <- glm(y~nr.employed + cons.price.idx + duration + campaign  + contact  + education  + age+ poutcome +duration*contact + duration*job , family = "binomial", data = trainingsData2)
+
+custom.log <- glm(y ~ nr.employed + cons.price.idx + campaign  + contact  + education  + age + poutcome + month*job + month*campaign + nr.employed*emp.var.rate, family = "binomial", data = trainingsData2)
 
 (vif(custom.log)[,3])^2
 #plot(custom.log) #No evident influencers from Cook's D
@@ -625,7 +626,9 @@ abline(a=0, b= 1)
 text(x = .40, y = .6,paste("AUC = ", round(roc.train[[1]],3), sep = ""))
 
 #determine the cutoff for the confusion matrix
-predicted.classes <- ifelse(pred.log < 0.1, "no", "yes") # 0.1= cutoff of confusion matrix
+cutoff = 0.1
+predicted.classes <- ifelse(pred.log < cutoff, "no", "yes") # 0.1= cutoff of confusion matrix
+
 
 # Model accuracy
 mean(predicted.classes==testData$y)
@@ -635,7 +638,18 @@ summary(pred.log)
 predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = testData$y)
 
 #Confusion Matrix
-confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+cm.complex <- confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+
+# fill in df
+
+  cm.df.custom[counter,1] <- 'complex log model'
+  cm.df.custom[counter,2] <- cm.complex$overall[1] # accuracy
+  cm.df.custom[counter,3] <- cm.complex$byClass[1] # sensitivity
+  cm.df.custom[counter,4] <- cm.complex$byClass[2] # specificity
+  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
+  cm.df.custom[counter,6] <- cutoff # cutoff value
+  counter = counter + 1
+
 ```
 
 
@@ -766,6 +780,37 @@ legend("bottomright",legend=c("LDA", "LDA w/ PCA"),
 abline(a=0, b= 1)
 text(x = .80, y = .65,paste("LDA AUC = ", round(auc.train.lda[[1]],3), sep = ""))
 text(x = .80, y = .55,paste("LDA w/ PCA AUC = ", round(auc.train.pca.lda[[1]],3), sep = ""))
+
+
+```
+
+****************************************
+# Regression Tree Model
+****************************************
+```{r tree}
+#Building a tree out, based on ALL variables from the regression model
+library(tree)
+tree.data <- df[c(-11,-23)]
+
+par(mfrow=c(1,1))
+tree.bank<-tree(y~.,tree.data,minsize=5)
+summary(tree.bank)
+plot(tree.bank)
+text(tree.bank,pretty=0)
+
+#Perform CV to deterine if we need to prune the tree. -- 7 parameters was the lowest
+set.seed(1234)
+cv.tree<-cv.tree(tree.bank,FUN=prune.tree,method="deviance")
+plot(cv.tree)
+plot(cv.tree$size, cv.tree$dev, type='b')
+
+
+#Building a tree out, based on SELECT variables from the regression model
+par(mfrow=c(1,1))
+tree.bank2<-tree(y~nr.employed + pdays + month  + cons.price.idx + campaign  + contact  + education  + age ,tree.data,minsize=5)
+summary(tree.bank2)
+plot(tree.bank2)
+text(tree.bank2,pretty=0)
 
 
 ```
