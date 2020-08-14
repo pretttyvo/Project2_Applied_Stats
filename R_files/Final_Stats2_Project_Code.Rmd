@@ -6,14 +6,14 @@ output: html_document
 ---
 
 # Introduction
-
+******
 The data relates to a phone call marketing campaign directed by a banking institution to predict whether or not a client will participate in a term deposit. Term deposits are considered to be a more secure investment opportunity, considered to be somewhat protected from market fluctuations, as opposed to stocks. Generally, a client will invest a specific sum for a set amount of time (e.g. 5 months) with a predetermined interest rate. The investment is then pulled after the time has passed or prior, typically with a cost penalty. 
 
 The dataset contains all contact attempts to the clients, which can be multiple times to determine whether or not the client will subscribe to a term deposit (campaign). In total, there are 41,188 total observations. For social and economic context attributes, keep in mind that the indicators are assumed to be pulled from the general demographic, and is hence normalizing the data.
 
-```{r, results="hide", echo=FALSE}
+```{r, results="hide", echo=FALSE, warning=FALSE,message=FALSE}
+library(reshape)
 # read in libraries
-
 library(naniar)
 library(ggplot2)
 library(dplyr)
@@ -31,6 +31,8 @@ library(randomForest)
 library(RColorBrewer)
 #library(rgl) ##For mac users you may need to download Xquartz before the 3d plots
 #will run.
+library(pheatmap)
+library(RColorBrewer)
 library(tree)
 library(ISLR)
 library(viridis)
@@ -84,7 +86,7 @@ Input variables:
 #### Output variable (desired target):
 21 - y - has the client subscribed a term deposit? (binary: 'yes','no')
 
-## EDA
+## Data Cleaning
 
 ### Cleaning data, new variable generation, and/or handling missing logistics
 
@@ -120,10 +122,11 @@ summary(df)
 nrow(df)
 # types of each category
 str(df)
+
 ```
 
 ### Converting columns to correct types
-Convert required data from vector to int
+Convert required data from vector to int.
 ```{r, results="hide", echo=FALSE}
 # converting factors to numeric
 cols.vector <- c("emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")
@@ -135,9 +138,9 @@ for (col.name in cols.vector){
 }
 
 ```
-****************************************
-##### EDA - Determining significant columns
-****************************************
+
+#EDA - Determining significant columns
+******
 1. Pdays - a significant number of the observations do not have prior contacts, hence they do not have days after the first contacts filed (pdays not equal to 999). 3.68% of the observations (1,151 records) have had more than one contact. This appears to be an insignificant column.
 
 2. Previous - while ~14% of the clients were contacted prior to the current campaign, 11% were contacted only 1 prior, leaving only 3% that were contacted more than once, prior.  
@@ -162,7 +165,9 @@ summary(df.prior)
 
 ```
 
-#####New Variable Generation
+## Data Manipulation
+
+### New Variable Generations
 ```{r, echo=FALSE}
 # convert 999 in pdays to 0
 df$pdays_0 <- df$pdays
@@ -170,7 +175,7 @@ df$pdays_0[df$pdays_0 == 999] <- 0
 
 ```
 
-##### Handling of Missing Logistics
+### Handling of Missing Logistics
 There are no missing values -> this is due to the fact that missing values are designated as unknown.
 
 Columns with missing data
@@ -215,7 +220,9 @@ summary(df.missing.1)
 
 ```
 
-##### Plotting for trend determination
+## Data Plots
+
+### Plotting for trend determination
 FULL DATASET: Visual for numeric, color categorized by whether or not the client participated in term deposit.
 ```{r, echo=FALSE}
 # get all numeric columns into a subset
@@ -228,13 +235,12 @@ FULL DATASET: Visual for numeric, color categorized by whether or not the client
 # create matrix plot to determine trends, if any
   # original data
     my_cols <- c("#00AFBB", "#E7B800") 
-   # p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
+    p1 <- pairs(df.int[,1:10], pch = 19, col = my_cols[df.int$y])
 ```
 MISSING DATA: Visual for numeric, color categorized by whether or not the client participated in term deposit.
 ```{r, echo=FALSE}
   # missing data
-   # p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
-
+   p2 <- pairs(df.missing.int[,1:10], pch = 19, col = my_cols[df.missing.int$y])
 
 ```
 
@@ -257,69 +263,31 @@ ggplot(t, aes(x = housing, y=n))+
   ggtitle("Marital Stats vs. Housing vs. Contact")
 ```
 
-```{r}
-df.new <- df
-#Creating an Age Bucket
-df.new$agebucket <- with(df, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
-,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","<20"))))))))
-attach(df.new)
-prop.table(table(y,agebucket),2)
-barplot(prop.table(table(y,agebucket),2),col=c("red","blue"), main = "Term Deposits by Age Bucket", xlab = "Yes = Blue | No = Red")
-legend(1,95,legend=c("Yes","No"), col=c("red","blue"))
-#Job - Categorical
-#Student & Retired have more Y with 25 & 31% 
-prop.table(table(y,job),2)
-plot(y~job,col=c("red","blue"), main = "Term Deposits by Job Type", xlab = "Yes = Blue | No = Red", rotation = "vertical")
-
-
-#table(y,job)
-#Marital - Categorical
-#Single & Unkown a little higher with 14-15% 
-prop.table(table(y,marital),2)
-plot(y~marital,col=c("red","blue"))
-#Education - Categorical
-prop.table(table(y,education),2) #
-plot(y~education,col=c("red","blue"))
-#Default - (categorical: 'no','yes','unknown')
-prop.table(table(y,default),2) #default: has credit in default?
-plot(y~default,col=c("red","blue"))
-#Contact Communication Type
-prop.table(table(y,contact),2) #15% yes on cellular vs 5% on telephone
-plot(y~contact,col=c("red","blue"))
-#Month
-prop.table(table(y,month),2) #march & december almost have 50% yeses
-plot(y~month,col=c("red","blue"))
-#Weekday
-prop.table(table(y,day_of_week),2) #Tues - Thur have higher yeses - may be interesting to see in line graph
-plot(y~day_of_week,col=c("red","blue"))
-
-```
-
-****************************************
-DATA SPLIT
-****************************************
-2.  There are way more No's than Yes for the response variable.  Consider sampling your training data set in such a way that the Yes and No's are more equally balanced.   (This technique is referred to as downsampling.  There is also upsampling.)  After your groups meet and discuss, you can meet with me for a deeper discussion on this issue.
+## DATA SPLIT
+*****
+There are way more No's than Yes for the response variable. In order to balance out the dataset, after the training split, the data is downsampled to prevent the entire minority group from being entirely excluded from the test set. The downsampled training set is then removed from the full data set to result in the test set.
 ```{r, echo=FALSE}
 
 ### Split the data into train/test
 #-----------------------------------------------------------------------#
 
 set.seed(1234)
-colnames(df)
 # set index
 df$ID <- seq.int(nrow(df))
 
 trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
 trainingData <- df[trainingRowIndex, ]  # model training data
-summary(trainingData)
-trainingsData <- downsample(trainingData, cat_col ='y')
+trainingsData <- downsample(trainingData, cat_col ='y') # downsample
 testData  <- df[-trainingsData$ID, ]   # test data
-
-
 
 ```
 
-```{r}
+## Ojective 1: Simple Logitistic Regression Model
+*****
+The primary focus of objective 1 is to ensure that interpretability is preserved, while attempting to create an accurace model that predicts efficiently. 
+
+### Original Logistic Regression
+```{r, echo=FALSE}
 ### Test feature selection on the training dataset
 #-----------------------------------------------------------------------#
 # drop insignificant columns
@@ -345,8 +313,8 @@ logit.og <- glm(y ~ job + education + contact + month +
 summary(logit.og)
 #confint(mylogit)
 ```
-STEPWISE
-```{r}
+### Stepwise Feature Selection
+```{r, echo=FALSE}
 # -- Run a STEPWISE method
 # Stepwise regression model - AIC: 1525.3
 #step.log<-mylogit %>% stepAIC(trace=FALSE)
@@ -360,8 +328,9 @@ logit.step <- glm(y ~ education + month + poutcome +
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.step)
 ```
-FORWARD
-```{r}
+
+### Forward Feature Selection
+```{r, echo=FALSE}
 # Forward regression model
 forward.model <- stepAIC(mylogit, direction = "forward", 
                       trace = FALSE)
@@ -374,8 +343,9 @@ logit.forward <- glm(y ~ age + job + month +
 summary(logit.forward)
 
 ```
-BACKWARDS
-```{r}
+
+### Backwards Feature Selection
+```{r, echo=FALSE}
 # Backward regression model
 backward.model <- stepAIC(mylogit, direction = "backward", 
                       trace = FALSE)
@@ -385,13 +355,18 @@ logit.backward <- glm(y ~ education + month +
                         cons.price.idx + nr.employed, 
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.backward)
+
 ```
-LASSO
 
-```{r}
+### LASSO Feature Selection
 
-dat.train.x <- model.matrix(y~.,trainingsData2)
-dat.train.y<-trainingsData2[,20]
+```{r, echo=FALSE}
+# removing duration for LASSO
+trainingsData2L <- trainingsData2[ , -which(names(trainingsData2) %in% c("duration"))]
+colnames(trainingsData2L)
+colnames(trainingsData2)
+dat.train.x <- model.matrix(y~.,trainingsData2L)
+dat.train.y<-trainingsData2L[,19]
 cvfit <- cv.glmnet(dat.train.x, dat.train.y, family = "binomial", type.measure = "class", nlambda = 1000)
 plot(cvfit)
 coef(cvfit, s = "lambda.min")
@@ -407,115 +382,38 @@ cvfit$lambda.min
 #data set
 
 logit.lasso<-glmnet(dat.train.x, dat.train.y, family = "binomial",lambda=cvfit$lambda.min)
-colnames(trainingsData2)
+
 coef(logit.lasso)
 
-logit.test <- glm(y ~ #job 
-                  #+ marital 
+logit.lasso2 <- glm(y ~ job 
+                  + marital 
                   #+ housing 
-                   education 
-                  #+ default 
-                  #+ contact 
+                  + education 
+                  + default 
+                  + contact 
                   + month
-                  #+ day_of_week 
-                  + duration 
-                  #+ campaign 
+                  + day_of_week 
+                  + campaign 
                   + poutcome 
                   + emp.var.rate 
                   + cons.conf.idx 
                   + cons.price.idx 
                   + nr.employed 
                   , 
-                data = trainingsData2, family = "binomial") # final logit model - no fitting
-summary(logit.test)
-```
-CUSTOM 
-```{r}
-#   NEW VARIABLE CREATION
-# create new columns to replace old columns
-df.newvar <- df
-#colnames(df.newvar)
+                data = trainingsData2L, family = "binomial") # final logit model - no fitting
+summary(logit.lasso2)
 
-
-#Creating an Age Bucket
-df.newvar$agebucket <- with(df.newvar, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
-,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","Less than 20"))))))))
-
-df.newvar$education_0 <- df.newvar$education
-df.newvar$education_0[df.newvar$education_0 != "university.degree"] <- "unknown"
-df.newvar$job_0 <- df.newvar$job
-df.newvar$job_0[df.newvar$job_0 != "blue-collar"] <- "unknown"
-months <- list("aug", "may", "nov")
-df.newvar$month_0 <- "1"
-`%notin%` <- Negate(`%in%`)
-df.newvar$month_0[df.newvar$month %notin% months] <- "0"
-```
-DATAFRAME
-```{r}
-
-cm.df.custom <- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
-                    , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
-counter = 1
-
+# standard logit without duration
+mylogit2 <- glm(y ~ ., data = trainingsData2L, family = "binomial") # family indicates that it is a logit 
+summary(mylogit2)
 ```
 
-CUSTOM MODEL TESTING
-```{r}
-
-trainingRowIndex <- sample(1:nrow(df.newvar), 0.25*nrow(df.newvar))  # row indices for training data
-trainingData <- df.newvar[trainingRowIndex, ]
-testData  <- df.newvar[-trainingsData$ID, ]
-train.data <- df.newvar[trainingRowIndex, ]
-test.data  <- df.newvar[-trainingsData$ID, ]
-#train.data <- trainingData[ , -which(names(trainingData) %in% c("pdays","ID", "education", "job", "month"))]
-#test.data <- testData[ , -which(names(testData) %in% c("pdays","ID", "education", "job", "month"))]
-
-mylog <- glm(y ~ education + month + poutcome + 
-                  emp.var.rate + cons.price.idx  + nr.employed + emp.var.rate*cons.price.idx +
-                  cons.price.idx*nr.employed
-             , data = trainingsData2, family = "binomial") # family indicates that it is a logit 
-steps <- stepAIC(mylog, direction = "both", 
-                      trace = FALSE)
-# final stepwise model - AIC: 1525.3
-#summary(steps)
-
-testData2 <- testData[-c(13,23:27)]
-  
-pred.custom <- predict(steps, testData2)
-
-cutoff = 0.6
-
-predicted.custom.classes <- ifelse(pred.custom < cutoff, "no", "yes")
-
-# Create table for conjfusion Matrix
-predTable.custome <- tibble(Predicted = as.factor(predicted.custom.classes), Observed = testData2$y)
-
-#Confusion Matrix
-cm.custom <- confusionMatrix(predTable.custome$Predicted, reference = predTable.custome$Observed)
-#cm.custom
-
-# fill in df
-
-  cm.df.custom[counter,1] <- 'evr*cpi + cpi*em'
-  cm.df.custom[counter,2] <- cm.custom$overall[1] # accuracy
-  cm.df.custom[counter,3] <- cm.custom$byClass[1] # sensitivity
-  cm.df.custom[counter,4] <- cm.custom$byClass[2] # specificity
-  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
-  cm.df.custom[counter,6] <- cutoff # cutoff value
-  counter = counter + 1
-
-
-attach(cm.df.custom)
-ordered.cm.df.custom <- cm.df.custom[order(Cutoff),]
-detach(cm.df.custom)
-ordered.cm.df.custom
-```
-
-ROC CURVES
-```{r}
+### Roc Curves
+```{r, echo=FALSE}
 # 3. ROC Curves
 
-#testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
+testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
+testData2L <- testData2[ , -which(names(testData2) %in% c("duration"))]
 
 # predict
 fit.pred.og <- as.data.frame(predict(logit.og, testData2, type="response"))
@@ -523,7 +421,7 @@ fit.pred.step <- as.data.frame(predict(step.model, testData2, type="response"))
 fit.pred.forward <- as.data.frame(predict(logit.forward, testData2, type="response"))
 fit.pred.backward <- as.data.frame(predict(logit.backward, testData2, type="response"))
 
-dat.test.x<-model.matrix(y~.,testData2)
+dat.test.x<-model.matrix(y~.,testData2L)
 fit.pred.lasso <- predict(logit.lasso, newx = dat.test.x, type = "response")
 
 # predictions
@@ -531,7 +429,7 @@ results.og<-prediction(fit.pred.og, testData2$y,label.ordering=c("no","yes"))
 results.step<-prediction(fit.pred.step, testData2$y,label.ordering=c("no","yes"))
 results.forward<-prediction(fit.pred.forward, testData2$y,label.ordering=c("no","yes"))
 results.backward<-prediction(fit.pred.backward, testData2$y,label.ordering=c("no","yes"))
-results.lasso<-prediction(fit.pred.lasso, testData2$y,label.ordering=c("no","yes"))
+results.lasso<-prediction(fit.pred.lasso, testData2L$y,label.ordering=c("no","yes"))
 
 #performance
 roc.og = performance(results.og, measure = "tpr", x.measure = "fpr")
@@ -565,23 +463,23 @@ text(x = .80, y = .45,paste("Lasso AUC = ", round(auc_ROCR.lasso,3), sep = ""))
 ```
 According to the AUC of the ROC curves, Lasso appears to have an upper hand.
 
-##### Comparing AIC and AUC
-```{r}
-models <- c("original", "stepwise", "forward", "backwarc", "lasso")
-AICs <- c(2559.1, 1525.3, 1530.3, 2555.9, 1542.8)
+### Comparing AIC and AUC
+```{r, echo=FALSE}
+models <- c("original", "stepwise", "forward", "backwarcd", "lasso")
+AICs <- c(extractAIC(logit.og)[2], extractAIC(logit.step)[2], extractAIC(logit.forward)[2], extractAIC(logit.backward)[2], extractAIC(logit.lasso2)[2])
 AUCs <- c(round(auc_ROCR,3),round(auc_ROCR.step,3),round(auc_ROCR.forward,3),round(auc_ROCR.backward,3),round(auc_ROCR.lasso,3))
 
 data <- list(model = models, AIC = AICs, AUC = AUCs)
 
 model.stats <- as.data.frame(data)
-
+model.stats
 ```
 According to the AUC, stepwise, forward, and Lasso have the highest area under the curve. 
 
 While the AIC of the three models are relatively close, stepwise is the lowest of the 5 models tested. 
 
-##### Ratio Statistics
-```{r}
+### Ratio Statistics
+```{r, echo=FALSE}
 
 # 4. odds ratios only
 exp(coef(logit.step))
@@ -590,8 +488,8 @@ exp(coef(logit.step))
 exp(cbind(OR = coef(logit.step), confint(logit.step)))
 
 ```
-Cut off selection
-```{r}
+### Cut off selection
+```{r, echo=FALSE}
 # create df to hold metrics
 alg <- list('Original', 'Step', 'Forward', 'Backward', 'Lasso')
 
@@ -599,8 +497,8 @@ cm.df <- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
                     , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
 count = 1
 ```
-
-```{r}
+The cut off selection was manually iterated through, referencing the ROC curve to determine the best cutoff.
+```{r, echo=FALSE}
 
 pred.og <- predict(logit.og, testData2)
 pred.step <- predict(step.model, testData2)
@@ -652,10 +550,95 @@ ordered.step.cm
 
 print(cm.df%>% filter(Cutoff == 0.4))
 ```
-****************************************
-  ## CUSTOM COMPLEX MODEL
-****************************************
-```{r}
+
+## Objective 2: Complex Model
+*****
+
+The goal of model 2 is to increase predictability despite the loss of interpretability. 
+
+### Initial Custom Model Testing
+```{r, echo=FALSE}
+#   NEW VARIABLE CREATION
+# create new columns to replace old columns
+df.newvar <- df
+#colnames(df.newvar)
+
+
+#Creating an Age Bucket
+df.newvar$agebucket <- with(df.newvar, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
+,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","Less than 20"))))))))
+
+df.newvar$education_0 <- df.newvar$education
+df.newvar$education_0[df.newvar$education_0 != "university.degree"] <- "unknown"
+df.newvar$job_0 <- df.newvar$job
+df.newvar$job_0[df.newvar$job_0 != "blue-collar"] <- "unknown"
+months <- list("aug", "may", "nov")
+df.newvar$month_0 <- "1"
+`%notin%` <- Negate(`%in%`)
+df.newvar$month_0[df.newvar$month %notin% months] <- "0"
+```
+
+```{r, echo=FALSE}
+# create a dataframe to hold the iterative data
+cm.df.custom <- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
+                    , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
+counter = 1
+
+```
+
+### Final Custom Model Testing
+```{r, echo=FALSE}
+
+trainingRowIndex <- sample(1:nrow(df.newvar), 0.25*nrow(df.newvar))  # row indices for training data
+trainingData <- df.newvar[trainingRowIndex, ]
+testData  <- df.newvar[-trainingsData$ID, ]
+train.data <- df.newvar[trainingRowIndex, ]
+test.data  <- df.newvar[-trainingsData$ID, ]
+#train.data <- trainingData[ , -which(names(trainingData) %in% c("pdays","ID", "education", "job", "month"))]
+#test.data <- testData[ , -which(names(testData) %in% c("pdays","ID", "education", "job", "month"))]
+
+mylog <- glm(y ~ education + month + poutcome + 
+                  emp.var.rate + cons.price.idx  + nr.employed + emp.var.rate*cons.price.idx +
+                  cons.price.idx*nr.employed
+             , data = trainingsData2, family = "binomial") # family indicates that it is a logit 
+steps <- stepAIC(mylog, direction = "both", 
+                      trace = FALSE)
+# final stepwise model - AIC: 1525.3
+#summary(steps)
+
+testData2 <- testData[-c(13,23:27)]
+  
+pred.custom <- predict(steps, testData2)
+
+cutoff = 0.6
+
+predicted.custom.classes <- ifelse(pred.custom < cutoff, "no", "yes")
+
+# Create table for conjfusion Matrix
+predTable.custome <- tibble(Predicted = as.factor(predicted.custom.classes), Observed = testData2$y)
+
+#Confusion Matrix
+cm.custom <- confusionMatrix(predTable.custome$Predicted, reference = predTable.custome$Observed)
+#cm.custom
+
+# fill in df
+
+  cm.df.custom[counter,1] <- 'evr*cpi + cpi*em'
+  cm.df.custom[counter,2] <- cm.custom$overall[1] # accuracy
+  cm.df.custom[counter,3] <- cm.custom$byClass[1] # sensitivity
+  cm.df.custom[counter,4] <- cm.custom$byClass[2] # specificity
+  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
+  cm.df.custom[counter,6] <- cutoff # cutoff value
+  counter = counter + 1
+
+
+attach(cm.df.custom)
+ordered.cm.df.custom <- cm.df.custom[order(Cutoff),]
+detach(cm.df.custom)
+ordered.cm.df.custom
+```
+
+```{r, echo=FALSE}
 set.seed(1234)
 custom.log <- glm(y ~  poutcome + month + nr.employed + emp.var.rate + cons.price.idx + euribor3m  + duration*month + nr.employed*emp.var.rate + duration*poutcome , family = "binomial", data = trainingsData2)
 
@@ -730,20 +713,20 @@ for (i in seq(from=0, to=1, by=0.05)){
 print(cm.df.custom)
 ```
 
+# EDA
+*****
 
-****************************************
-  ## PCA
-****************************************
-# Setting up test/training for just the continuous variables to look at PCA
-```{r}
+## PCA
+
+### Setting up test/training for just the continuous variables to look at PCA
+```{r, echo=FALSE}
 test.pca <- testData[,c(1,11:14,16:20)]
 train.pca <- trainingsData[,c(1,11:14,16:20)]
 ```
 
-# EDA - Do we want to include PCA here?
-OH? - PCA2 vs PCA4 has a clear seperation, but the ones before don't seem to have such a clear seperation. Is there some interpretation i'm missing here?
+PCA2 vs PCA4 has a clear seperation, but the ones before don't seem to have such a clear seperation.
 
-```{r PCA}
+```{r, echo=FALSE}
 pc.result<-prcomp(train.pca,scale.=TRUE)
 pc.scores<-pc.result$x
 pc.scores<-data.frame(pc.scores)
@@ -772,19 +755,17 @@ ggplot(data = pc.scores, aes(x = PC4, y = PC5)) +
   geom_point(aes(col=y), size=0.5)+
   ggtitle("PCA of Bank Data")
 
-ggplot(data = bank, aes(x = age, y = duration)) +
+ggplot(data = df, aes(x = age, y = duration)) +
   geom_point(aes(col=y), size=1)+
   ggtitle("Age & Duration - Bank Data")
 
 #make points finer
 ```
 
-****************************************
-  ## LDA
-****************************************
-# LDA
+## LDA
+
 Create another competing model using just the continuous predictors and use LDA or QDA
-```{r}
+```{r, echo=FALSE}
 #create data for LDA model
 test.lda <- testData[,c(1,11:14,16:21)]
 train.lda <- trainingsData[,c(1,11:14,16:21)]
@@ -820,9 +801,9 @@ confusionMatrix(as.factor(predTable.LDA$Predicted), reference = predTable.LDA$Ob
 
 ```
 
-# LDA w/ PCA variables
+### LDA w/ PCA variables
 Running an LDA on the PCA variables
-```{r pca on lda}
+```{r, echo=FALSE}
 pc.result<-prcomp(train.pca,scale.=TRUE)
 pc.scores<-pc.result$x
 pc.scores<-data.frame(pc.scores)
@@ -839,14 +820,21 @@ pred <- predict(mypcalda,newdata = pc.tests)
 
 #capture predictions
 pred.pca.lda <- as.data.frame(pred$posterior)
-pred.pca.lda <- prediction(pred.pca.lda[,2],pc.tests$y)
+
+#JV test inverted
+pred.pca.lda.inverted <- (-1*(pred.pca.lda[,2]-1))
+pred.pca.lda <- prediction(pred.pca.lda.inverted,pc.tests$y)
+#JV test END
+
+#pred.pca.lda <- prediction(pred.pca.lda[,2],pc.tests$y)
 
 #Plot the ROC curve
-roc.perf.pca.lda = performance(pred.pca.lda, measure = "tpr", x.measure = "fpr")
+roc.perf.pca.lda = performance(pred.pca.lda
+                               , measure = "tpr"
+                               , x.measure = "fpr"
+                               )
 auc.train.pca.lda <- performance(pred.pca.lda, measure = "auc")
 auc.train.pca.lda <- auc.train.pca.lda@y.values
-
-
 
 
 # plot
@@ -862,10 +850,39 @@ text(x = .80, y = .55,paste("LDA w/ PCA AUC = ", round(auc.train.pca.lda[[1]],3)
 
 ```
 
-****************************************
-# Regression Tree Model
-****************************************
-```{r tree}
+
+### Heatmap
+
+
+```{r, echo=FALSE}
+train<-trainingsData
+train$y <- as.factor(train$y)
+test<-testData[1:23]
+test$y <- as.factor(test$y)
+par(mfrow=c(1,3))
+length(train)
+length(test)
+
+dat.train <- train
+dat.train.x <- dat.train[,c("age","duration","campaign", "pdays_0","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")]
+dat.train.y <- dat.train$y
+dat.train.y <- as.factor(as.character(dat.train.y))
+cols <- colorRampPalette(brewer.pal(9, "Set1"))
+x<-t(dat.train.x)
+colnames(x)<-dat.train.y
+colorlist <- list(y=c("no"="white","yes"="green"))
+colanno <-data.frame(y=dat.train.y)
+pal <- colorRampPalette(c("blue","white", "red"), space = "rgb")(50)
+clean_x <- na.omit(x)
+#pheatmap(clean_x,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal)
+pheatmap(clean_x,treeheight_row = 0, treeheight_col = 0,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal, xlab="Subscribed", ylab="", main="Heatmap")
+```
+
+## Additional Models
+
+### Regression Tree Model
+
+```{r, echo=FALSE}
 #Building a tree out, based on ALL variables from the regression model
 library(tree)
 tree.data <- df[c(-11,-23)]
@@ -912,42 +929,9 @@ text(tree.bank2,pretty=0)
 
 ```
 
+### Random Forest
 
-
-Heatmap
-
-
-```{r}
-train<-trainingsData
-train$y <- as.factor(train$y)
-test<-testData[1:23]
-test$y <- as.factor(test$y)
-par(mfrow=c(1,3))
-length(train)
-length(test)
-
-dat.train <- train
-dat.train.x <- dat.train[,c("age","duration","campaign", "pdays_0","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")]
-dat.train.y <- dat.train$y
-dat.train.y <- as.factor(as.character(dat.train.y))
-cols <- colorRampPalette(brewer.pal(9, "Set1"))
-x<-t(dat.train.x)
-colnames(x)<-dat.train.y
-colorlist <- list(y=c("no"="white","yes"="green"))
-colanno <-data.frame(y=dat.train.y)
-pal <- colorRampPalette(c("blue","white", "red"), space = "rgb")(50)
-clean_x <- na.omit(x)
-#pheatmap(clean_x,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal)
-pheatmap(clean_x,treeheight_row = 0, treeheight_col = 0,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal, xlab="Subscribed", ylab="", main="Heatmap")
-```
-
-
-
-
-# Random Forest
-
-
-```{r}
+```{r, echo=FALSE}
 #Random forrest
 #Here we will do a truly RF run by selecting mtry. mtry controls how many
 #predictors are sampled for each bootstrap sample.
@@ -973,7 +957,7 @@ varImpPlot (rf.car,type=2,main="Variable Importance")
 #Predicted Probability cutoff
 ```
 
-```{r}
+```{r, echo=FALSE}
 cutoff<-0.09
 class.rf<-factor(ifelse(rf.pred[,2]>cutoff,"no","yes"),levels=c("no","yes"))
 #Confusion Matrix for RF

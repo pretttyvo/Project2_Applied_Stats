@@ -1,0 +1,44 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, echo=FALSE}
+
+df.new <- df
+#Creating an Age Bucket
+df.new$agebucket <- with(df, ifelse(age>79,"80+",ifelse(age>69,"70-79",ifelse(age>59,"60-69"
+,ifelse(age>49,"50-59",ifelse(age>39,"40-49", ifelse(age>29,"30-39",ifelse(age>19,"20-29","<20"))))))))
+attach(df.new)
+prop.table(table(y,agebucket),2)
+barplot(prop.table(table(y,agebucket),2),col=c("red","blue"), main = "Term Deposits by Age Bucket", xlab = "Yes = Blue | No = Red")
+legend(1,95,legend=c("Yes","No"), col=c("red","blue"))
+#Job - Categorical
+#Student & Retired have more Y with 25 & 31% 
+prop.table(table(y,job),2)
+plot(y~job,col=c("red","blue"), main = "Term Deposits by Job Type", xlab = "Yes = Blue | No = Red", rotation = "vertical")
+```
+
+```{r, echo=FALSE}
+#table(y,job)
+#Marital - Categorical
+#Single & Unkown a little higher with 14-15% 
+prop.table(table(y,marital),2)
+plot(y~marital,col=c("red","blue"))
+#Education - Categorical
+prop.table(table(y,education),2) #
+plot(y~education,col=c("red","blue"))
+#Default - (categorical: 'no','yes','unknown')
+prop.table(table(y,default),2) #default: has credit in default?
+plot(y~default,col=c("red","blue"))
+#Contact Communication Type
+prop.table(table(y,contact),2) #15% yes on cellular vs 5% on telephone
+plot(y~contact,col=c("red","blue"))
+#Month
+prop.table(table(y,month),2) #march & december almost have 50% yeses
+plot(y~month,col=c("red","blue"))
+#Weekday
+prop.table(table(y,day_of_week),2) #Tues - Thur have higher yeses - may be interesting to see in line graph
+plot(y~day_of_week,col=c("red","blue"))
+
+```
