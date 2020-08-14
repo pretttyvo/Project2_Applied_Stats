@@ -638,7 +638,7 @@ roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
 #I'm just rinsing and repeating code the produces the curve.
 auc.train <- performance(pred, measure = "auc")
 auc.train <- auc.train@y.values
-plot(roc.perf,main="AUC of Test set RF - mtry=3")
+plot(roc.perf,main="AUC of Test set RF - mtry=2")
 abline(a=0, b= 1)
 text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 #Which variables are important.  We can use variable importance.
@@ -656,7 +656,7 @@ conf.rf<-confusionMatrix(class.rf,test$y)
 print("Confusion matrix for LRF")
 conf.rf
 
-print("Overall accuracy for RF and Stepwise respectively")
+print("Overall accuracy for RF ")
 # mean(class.lasso==testData2$y)
 mean(class.rf==test$y)
 summary(test$y)
@@ -681,7 +681,9 @@ library(RColorBrewer)
 library(tree)
 library(ISLR)
 library(viridis)
+```
 
+```{r}
 dat.train <- train
 summary(dat.train)
 dat.train.x <- dat.train[,c("age","duration","campaign", "pdays_0","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")]
@@ -701,7 +703,7 @@ pheatmap(clean_x,annotation_col=colanno,annotation_colors=colorlist,scale="row",
 
 pheatmap(clean_x,treeheight_row = 0, treeheight_col = 0,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal, xlab="Bought", ylab="", main="heatmap")
 # Add classic arguments like main title and axis title
-heatmap(clean_x, Colv = NA, Rowv = NA,scale="row", col = pal, xlab="Bought", ylab="", main="heatmap")
+#heatmap(clean_x, Colv = NA, Rowv = NA,scale="row", col = pal, xlab="Bought", ylab="", main="heatmap")
 
  
 ```
