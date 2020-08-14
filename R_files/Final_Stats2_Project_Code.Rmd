@@ -102,8 +102,8 @@ Input variables:
  $ y             : Factor 
 ```{r, results="hide", echo=FALSE}
 # read in the data
-#df <- read.csv2('../../Data/bank-additional-full.csv')
-df <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
+df <- read.csv2('../Data/bank-additional-full.csv')
+#df <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
 
 # get summary statistics
 summary(df)
@@ -305,6 +305,8 @@ summary(trainingData)
 trainingsData <- downsample(trainingData, cat_col ='y')
 testData  <- df[-trainingsData$ID, ]   # test data
 
+
+
 ```
 
 ```{r}
@@ -339,14 +341,14 @@ STEPWISE
 # Stepwise regression model - AIC: 1525.3
 #step.log<-mylogit %>% stepAIC(trace=FALSE)
 
-step.log<-mylogit %>% stepAIC(trace=FALSE)
+#step.log<-mylogit %>% stepAIC(trace=FALSE)
 step.model <- stepAIC(mylogit, direction = "both", 
                       trace = FALSE)
 # final stepwise model - AIC: 1525.3
 logit.step <- glm(y ~ education + month + poutcome + 
-                  emp.var.rate  + duration + cons.price.idx  + nr.employed, 
+                  emp.var.rate   + cons.price.idx  + nr.employed, 
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
-summary(step.log)
+summary(logit.step)
 ```
 FORWARD
 ```{r}
@@ -355,8 +357,8 @@ forward.model <- stepAIC(mylogit, direction = "forward",
                       trace = FALSE)
 
 # final forward regression - AIC: 1530.3
-logit.forward <- glm(y ~ age + job + month + 
-                  duration + cons.price.idx  + 
+logit.forward <- glm(y ~ age + job + month +
+                   day_of_week + cons.price.idx  + 
                   nr.employed + poutcome, 
                 data = trainingsData2, family = "binomial") # final logit model - no fitting
 summary(logit.forward)
@@ -447,7 +449,7 @@ counter = 1
 
 ```
 
-MODEL
+CUSTOM MODEL TESTING
 ```{r}
 
 trainingRowIndex <- sample(1:nrow(df.newvar), 0.25*nrow(df.newvar))  # row indices for training data
@@ -562,7 +564,6 @@ AUCs <- c(round(auc_ROCR,3),round(auc_ROCR.step,3),round(auc_ROCR.forward,3),rou
 data <- list(model = models, AIC = AICs, AUC = AUCs)
 
 model.stats <- as.data.frame(data)
-
 
 ```
 According to the AUC, stepwise, forward, and Lasso have the highest area under the curve. 
@@ -697,17 +698,25 @@ cm.df.custom<- cm.df
 
   
 #Loop through cutoff 
-
+counts = 1
+cm.df.custom<- data.frame(Model=character(),Accuracy=numeric(), Sensitivity=numeric()
+                    , Specificity=numeric(), Average=numeric(), Cutoff=numeric(),stringsAsFactors=FALSE)
+  
 for (i in seq(from=0, to=1, by=0.05)){
-  cm.df.custom[counter,1] <- 'Complex Log Model'
-  cm.df.custom[counter,2] <- cm.complex$overall[1] # accuracy
-  cm.df.custom[counter,3] <- cm.complex$byClass[1] # sensitivity
-  cm.df.custom[counter,4] <- cm.complex$byClass[2] # specificity
-  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
-  cm.df.custom[counter,6] <- i # cutoff value
-  counter = counter + 1
- }
-
+  #JAMIE ADD
+  predicted.classes <- ifelse(pred.log < i, "no", "yes")
+  predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = testData$y)
+  cm.complex <- confusionMatrix(predTable$Predicted, reference = predTable$Observed)
+  # JAMIE END
+  cm.df.custom[counts,1] <- 'Complex Log Model'
+  cm.df.custom[counts,2] <- cm.complex$overall[1] # accuracy
+  cm.df.custom[counts,3] <- cm.complex$byClass[1] # sensitivity
+  cm.df.custom[counts,4] <- cm.complex$byClass[2] # specificity
+  cm.df.custom[counts,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
+  cm.df.custom[counts,6] <- i # cutoff value
+  counts = counts + 1
+}
+  
 print(cm.df.custom)
 ```
 
