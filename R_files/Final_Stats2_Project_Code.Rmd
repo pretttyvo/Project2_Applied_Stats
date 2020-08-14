@@ -102,8 +102,8 @@ Input variables:
  $ y             : Factor 
 ```{r, results="hide", echo=FALSE}
 # read in the data
-df <- read.csv2('../../Data/bank-additional-full.csv')
-#df <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
+#df <- read.csv2('../../Data/bank-additional-full.csv')
+df <- read.csv2("C:/Users/david/OneDrive/Desktop/AppliedStats/Project2_Applied_Stats/Data/bank-additional-full.csv")
 
 # get summary statistics
 summary(df)
@@ -597,7 +597,7 @@ pred.forward <- predict(logit.forward, testData2)
 pred.backward <- predict(logit.backward, testData2)
 pred.lasso <- predict(logit.lasso, newx = dat.test.x)
 
-cutoff = 0.45
+cutoff = 0.40
 
 predicted.og.classes <- ifelse(pred.og < cutoff, "no", "yes")
 predicted.step.classes <- ifelse(pred.step < cutoff, "no", "yes")
@@ -695,7 +695,20 @@ cm.df.custom<- cm.df
   cm.df.custom[counter,6] <- cutoff # cutoff value
   counter = counter + 1
 
-  print(cm.df.custom)
+  
+#Loop through cutoff 
+
+for (i in seq(from=0, to=1, by=0.05)){
+  cm.df.custom[counter,1] <- 'Complex Log Model'
+  cm.df.custom[counter,2] <- cm.complex$overall[1] # accuracy
+  cm.df.custom[counter,3] <- cm.complex$byClass[1] # sensitivity
+  cm.df.custom[counter,4] <- cm.complex$byClass[2] # specificity
+  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
+  cm.df.custom[counter,6] <- i # cutoff value
+  counter = counter + 1
+ }
+
+print(cm.df.custom)
 ```
 
 
@@ -849,17 +862,11 @@ text(tree.bank,pretty=0)
 
 #downsampled training
 par(mfrow=c(1,1))
-tree.bank<-tree(y~.,tree.data.train, split="gini" )
+tree.bank<-tree(y~.,tree.data.train )
 summary(tree.bank)
 plot(tree.bank)
 text(tree.bank,pretty=0)
 
-#downsampled test set
-par(mfrow=c(1,1))
-tree.bank<-tree(y~.,tree.data.test)
-summary(tree.bank)
-plot(tree.bank)
-text(tree.bank,pretty=0)
 
 #Perform CV to deterine if we need to prune the tree. -- 7 parameters was the lowest
 set.seed(1234)
@@ -884,104 +891,4 @@ plot(tree.bank2)
 text(tree.bank2,pretty=0)
 
 
-```
-
-
-Heatmap
-
-```{r}
-library(glmnet)
-library(ROCR)
-library(MASS)
-library(ggplot2)
-library(pheatmap)
-library(randomForest)
-
-library(RColorBrewer)
-#library(rgl) ##For mac users you may need to download Xquartz before the 3d plots
-#will run.
-library(tree)
-library(ISLR)
-library(viridis)
-
-train<-trainingsData
-train$y <- as.factor(train$y)
-test<-testData[1:23]
-test$y <- as.factor(test$y)
-par(mfrow=c(1,3))
-
-length(train)
-length(test)
-
-```
-
-```{r}
-dat.train <- train
-
-dat.train.x <- dat.train[,c("age","duration","campaign", "pdays_0","previous","emp.var.rate","cons.price.idx","cons.conf.idx","euribor3m","nr.employed")]
-
-dat.train.y <- dat.train$y
-dat.train.y <- as.factor(as.character(dat.train.y))
-
-cols <- colorRampPalette(brewer.pal(9, "Set1"))
-x<-t(dat.train.x)
-colnames(x)<-dat.train.y
-colorlist <- list(y=c("no"="white","yes"="green"))
-colanno <-data.frame(y=dat.train.y)
-
-pal <- colorRampPalette(c("blue","white", "red"), space = "rgb")(50)
-clean_x <- na.omit(x)
-#pheatmap(clean_x,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal)
-
-pheatmap(clean_x,treeheight_row = 0, treeheight_col = 0,annotation_col=colanno,annotation_colors=colorlist,scale="row",legend=T,color=pal, xlab="Subscribed", ylab="", main="Heatmap")
-```
-
-
-
-
-# Random Forest
-
-
-```{r}
-#Random forrest
-#Here we will do a truly RF run by selecting mtry. mtry controls how many
-#predictors are sampled for each bootstrap sample.
-rf.car<-randomForest(y ~ education + month + poutcome + emp.var.rate  + cons.price.idx + nr.employed,data=train,mtry=2,importance=T,ntree=100)
-
-#Making predictions on test and then observing accuracy rates
-fit.pred<-predict(rf.car,newdata=test,type="response")
-summary(fit.pred)
-table(fit.pred,test$y) #Default prediction uses .5 as cut off you can change it specifying "cutoff" option
-
-#Go get the ROC
-rf.pred<-predict(rf.car,newdata=test,type="prob")
-pred <- prediction(rf.pred[,2], test$y)
-
-roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
-#Note in the following code the term "train" means nothing here. 
-#I'm just rinsing and repeating code the produces the curve.
-auc.train <- performance(pred, measure = "auc")
-auc.train <- auc.train@y.values
-plot(roc.perf,main="AUC of Test set RF - mtry=2")
-abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-#Which variables are important.  We can use variable importance.
-varImpPlot (rf.car,type=1,main="Variable Importance")
-varImpPlot (rf.car,type=2,main="Variable Importance")
-#Predicted Probability cutoff
-```
-
-```{r}
-cutoff<-0.09
-class.rf<-factor(ifelse(rf.pred[,2]>cutoff,"no","yes"),levels=c("no","yes"))
-
-#Confusion Matrix for RF
-conf.rf<-confusionMatrix(class.rf,test$y)
-print("Confusion matrix for LRF")
-conf.rf
-
-print("Overall accuracy for RF ")
-# mean(class.lasso==testData2$y)
-mean(class.rf==test$y)
-summary(test$y)
 ```
