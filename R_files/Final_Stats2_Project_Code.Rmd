@@ -24,6 +24,7 @@ library(ROCR)
 library(glmnet)
 library(aod)
 library(caret)
+library(car)
 
 ```
 
@@ -258,7 +259,9 @@ legend(1,95,legend=c("Yes","No"), col=c("red","blue"))
 #Job - Categorical
 #Student & Retired have more Y with 25 & 31% 
 prop.table(table(y,job),2)
-plot(y~job,col=c("red","blue"))
+plot(y~job,col=c("red","blue"), main = "Term Deposits by Job Type", xlab = "Yes = Blue | No = Red", rotation = "vertical")
+
+
 #table(y,job)
 #Marital - Categorical
 #Single & Unkown a little higher with 14-15% 
@@ -299,7 +302,6 @@ df$ID <- seq.int(nrow(df))
 trainingRowIndex <- sample(1:nrow(df), 0.25*nrow(df))  # row indices for training data
 trainingData <- df[trainingRowIndex, ]  # model training data
 summary(trainingData)
-summary(testData)
 trainingsData <- downsample(trainingData, cat_col ='y')
 testData  <- df[-trainingsData$ID, ]   # test data
 
@@ -465,6 +467,8 @@ steps <- stepAIC(mylog, direction = "both",
 # final stepwise model - AIC: 1525.3
 #summary(steps)
 
+testData2 <- testData[-c(13,23:27)]
+  
 pred.custom <- predict(steps, testData2)
 
 cutoff = 0.6
@@ -484,7 +488,7 @@ cm.custom <- confusionMatrix(predTable.custome$Predicted, reference = predTable.
   cm.df.custom[counter,2] <- cm.custom$overall[1] # accuracy
   cm.df.custom[counter,3] <- cm.custom$byClass[1] # sensitivity
   cm.df.custom[counter,4] <- cm.custom$byClass[2] # specificity
-  cm.df.custom[counter,5] <- mean(c(cm.df.custom[count,2], cm.df.custom[count,3], cm.df.custom[count,4]))
+  cm.df.custom[counter,5] <- mean(c(cm.df.custom[counter,2], cm.df.custom[counter,3], cm.df.custom[counter,4]))
   cm.df.custom[counter,6] <- cutoff # cutoff value
   counter = counter + 1
 
@@ -499,7 +503,7 @@ ROC CURVES
 ```{r}
 # 3. ROC Curves
 
-testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
+#testData2 <- testData[ , -which(names(testData) %in% c("pdays","ID"))]
 
 # predict
 fit.pred.og <- as.data.frame(predict(logit.og, testData2, type="response"))
@@ -641,8 +645,8 @@ print(cm.df%>% filter(Cutoff == 0.4))
   ## CUSTOM COMPLEX MODEL
 ****************************************
 ```{r}
-
-custom.log <- glm(y ~ nr.employed + cons.price.idx + campaign  + contact  + education  + age + poutcome + month*job + month*campaign + nr.employed*emp.var.rate, family = "binomial", data = trainingsData2)
+set.seed(1234)
+custom.log <- glm(y ~  poutcome + month + nr.employed + emp.var.rate + cons.price.idx + euribor3m  + duration*month + nr.employed*emp.var.rate + duration*poutcome , family = "binomial", data = trainingsData2)
 
 (vif(custom.log)[,3])^2
 #plot(custom.log) #No evident influencers from Cook's D
@@ -666,7 +670,7 @@ abline(a=0, b= 1)
 text(x = .40, y = .6,paste("AUC = ", round(roc.train[[1]],3), sep = ""))
 
 #determine the cutoff for the confusion matrix
-cutoff = 0.1
+cutoff = 0.3
 predicted.classes <- ifelse(pred.log < cutoff, "no", "yes") # 0.1= cutoff of confusion matrix
 
 
@@ -681,8 +685,9 @@ predTable <- tibble(Predicted = as.factor(predicted.classes), Observed = testDat
 cm.complex <- confusionMatrix(predTable$Predicted, reference = predTable$Observed)
 
 # fill in df
+cm.df.custom<- cm.df
 
-  cm.df.custom[counter,1] <- 'complex log model'
+  cm.df.custom[counter,1] <- 'Complex Log Model'
   cm.df.custom[counter,2] <- cm.complex$overall[1] # accuracy
   cm.df.custom[counter,3] <- cm.complex$byClass[1] # sensitivity
   cm.df.custom[counter,4] <- cm.complex$byClass[2] # specificity
@@ -690,6 +695,7 @@ cm.complex <- confusionMatrix(predTable$Predicted, reference = predTable$Observe
   cm.df.custom[counter,6] <- cutoff # cutoff value
   counter = counter + 1
 
+  print(cm.df.custom)
 ```
 
 
